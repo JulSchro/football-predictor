@@ -1,0 +1,1599 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FootballPredictor</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">
+      <span>Football intelligence lab</span>
+      <strong>FootballPredictor</strong>
+      <em>Predictive match desk</em>
+    </div>
+    <nav class="main-nav">
+      <button class="active" data-view="dashboard"><span>01</span>Dashboard</button>
+      <button data-view="prediction"><span>02</span>Prediccion</button>
+      <button data-view="tracking"><span>03</span>Seguimiento</button>
+      <button data-view="backtesting"><span>04</span>Backtesting</button>
+      <button data-view="competitions"><span>05</span>Competiciones</button>
+      <button data-view="database"><span>06</span>Base de datos</button>
+      <button data-view="data"><span>07</span>Datos</button>
+      <button data-view="calibration"><span>08</span>Calibracion</button>
+      <button data-view="automation"><span>09</span>Automatizacion</button>
+    </nav>
+    <div class="sidebar-status">
+      <span>Modo</span>
+      <b>Local</b>
+    </div>
+  </aside>
+
+  <main class="app-shell">
+    <header class="topbar">
+      <div>
+        <span id="viewEyebrow">Dashboard</span>
+        <h1 id="viewTitle">Centro de mando</h1>
+      </div>
+      <div class="top-actions">
+        <span class="system-pill">SQLite local</span>
+        <button class="icon-btn" onclick="refreshAll()">Actualizar</button>
+      </div>
+    </header>
+
+    <section class="view active" id="view-dashboard">
+      <div class="summary-grid" id="summary"></div>
+      <div class="dashboard-grid">
+        <section class="panel">
+          <div class="section-title"><span>System health</span><small>estado general</small></div>
+          <div id="systemHealth"></div>
+        </section>
+        <section class="panel">
+          <div class="section-title"><span>Performance</span><small>prediccion real</small></div>
+          <div id="dashboardPerformance"></div>
+        </section>
+        <section class="panel">
+          <div class="section-title"><span>Sesgos principales</span><small>mercados</small></div>
+          <div id="dashboardBiases"></div>
+        </section>
+        <section class="panel">
+          <div class="section-title"><span>Pendientes</span><small>resultados por capturar</small></div>
+          <div id="dashboardPending"></div>
+        </section>
+        <section class="panel">
+          <div class="section-title"><span>Partidos de hoy</span><small>operacion API</small></div>
+          <div id="todayOps"></div>
+        </section>
+      </div>
+    </section>
+
+    <section class="view" id="view-prediction">
+      <div class="prediction-command">
+        <section class="panel control-panel">
+          <div class="section-title"><span>Partido</span><small>entrada del modelo</small></div>
+          <label for="homeTeam">Local</label>
+          <select id="homeTeam"></select>
+          <label for="awayTeam">Visitante</label>
+          <select id="awayTeam"></select>
+          <label for="venueSelect">Sede</label>
+          <select id="venueSelect"></select>
+          <div class="two-cols">
+            <div>
+              <label for="simulationCount">Corridas</label>
+              <input id="simulationCount" type="number" min="1000" max="200000" step="1000" value="20000">
+            </div>
+            <div>
+              <label for="simulationMode">Modo</label>
+              <select id="simulationMode">
+                <option value="hybrid">Hibrido</option>
+                <option value="poker">Poker</option>
+                <option value="classic">Clasico</option>
+              </select>
+            </div>
+          </div>
+          <label class="check"><input type="checkbox" id="savePrediction"> Guardar prediccion</label>
+          <div class="button-row">
+            <button onclick="runPrediction()">Predecir</button>
+            <button class="secondary" onclick="runSimulation()">Simular</button>
+          </div>
+        </section>
+
+        <section class="panel decision-panel">
+          <div class="section-title"><span>Decision del modelo</span><small id="quickStatus">Esperando seleccion</small></div>
+          <div id="predictionPanel" class="empty-state">Ejecuta una prediccion para ver favorito, confianza y recomendacion.</div>
+        </section>
+      </div>
+
+      <section class="hero-panel match-stage">
+        <div class="match-title">
+          <span id="homeName">Local</span>
+          <b>vs</b>
+          <span id="awayName">Visitante</span>
+        </div>
+        <div id="simulationPanel" class="simulation-shell">
+          <div class="empty-state">Corre una simulacion para ver distribucion, escenarios y marcadores.</div>
+        </div>
+      </section>
+
+      <div class="analysis-grid insight-grid">
+        <section class="panel">
+          <div class="section-title"><span>Factores clave</span><small>ventaja relativa</small></div>
+          <div id="factorCards" class="factor-grid"></div>
+        </section>
+        <section class="panel">
+          <div class="section-title"><span>Perfiles de equipo</span><small>equipo vs equipo</small></div>
+          <div class="profile-compare">
+            <div><h3>Local <small id="homeSample"></small></h3><div id="homeProfile" class="profile-grid"></div></div>
+            <div><h3>Visitante <small id="awaySample"></small></h3><div id="awayProfile" class="profile-grid"></div></div>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section class="view" id="view-tracking">
+      <div class="analysis-grid">
+        <section class="panel">
+          <div class="section-title"><span>Guardar snapshot</span><small>antes del partido</small></div>
+          <div class="two-cols">
+            <div><label for="trackingDate">Fecha</label><input id="trackingDate" type="date"></div>
+            <div><label for="trackingCompetition">Competicion</label><input id="trackingCompetition" value="World Cup 2026"></div>
+          </div>
+          <button onclick="saveSnapshot()">Guardar snapshot prepartido</button>
+          <div class="workflow-list">
+            <div><b>1</b><span>Predecir</span><em>manual</em></div>
+            <div><b>2</b><span>Congelar snapshot</span><em>activo</em></div>
+            <div><b>3</b><span>Cargar resultado real</span><em>manual</em></div>
+            <div><b>4</b><span>Evaluar y calibrar</span><em>activo</em></div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="section-title"><span>Prediccion automatica</span><small>fixtures del dia</small></div>
+          <div class="three-cols">
+            <div><label for="dailyDate">Fecha</label><input id="dailyDate" type="date"></div>
+            <div><label for="dailyLeague">Liga ID</label><input id="dailyLeague" type="number" min="1" placeholder="Todas"></div>
+            <div><label for="dailySeason">Temporada</label><input id="dailySeason" type="number" min="1900" placeholder="2026"></div>
+          </div>
+          <div class="three-cols">
+            <div><label for="dailySimulations">Simulaciones</label><input id="dailySimulations" type="number" min="1000" max="50000" step="1000" value="1000"></div>
+            <div><label for="dailyRangeDays">Ventana</label><input id="dailyRangeDays" type="number" min="1" max="7" value="3"></div>
+            <label class="check"><input type="checkbox" id="dailyConfiguredOnly" checked> Solo competiciones objetivo</label>
+          </div>
+          <div class="button-row">
+            <button onclick="runDailySync()">Sincronizar dia</button>
+            <button class="secondary" onclick="runDailyPredictions()">Predecir dia</button>
+            <button class="secondary" onclick="runDailyResults()">Actualizar resultados</button>
+            <button class="secondary" onclick="runPendingReconciliation()">Rescatar pendientes</button>
+            <button onclick="runDailyPipeline()">Ciclo completo</button>
+          </div>
+          <div id="dailyOpsStatus" class="sync-note">Listo para crear snapshots automaticos con contexto.</div>
+          <div id="bettingBoard" class="betting-board empty-state">Los picks apareceran aqui cuando guardes snapshots para la ventana seleccionada.</div>
+        </section>
+      </div>
+
+      <div class="analysis-grid">
+        <section class="panel">
+          <div class="section-title"><span>Registrar resultado</span><small>partidos pendientes</small></div>
+          <label for="pendingSelect">Snapshot</label>
+          <select id="pendingSelect"></select>
+          <div class="two-cols">
+            <div><label for="actualHomeGoals">Goles local</label><input id="actualHomeGoals" type="number" min="0" value="0"></div>
+            <div><label for="actualAwayGoals">Goles visitante</label><input id="actualAwayGoals" type="number" min="0" value="0"></div>
+          </div>
+          <div class="three-cols">
+            <div><label for="actualCorners">Corners</label><input id="actualCorners" type="number" min="0" step="0.5"></div>
+            <div><label for="actualShots">Tiros puerta</label><input id="actualShots" type="number" min="0" step="0.5"></div>
+            <div><label for="actualCards">Tarjetas</label><input id="actualCards" type="number" min="0" step="0.5"></div>
+          </div>
+          <button class="secondary" onclick="saveResult()">Guardar resultado real</button>
+        </section>
+        <section class="panel">
+          <div class="section-title"><span>Estado diario</span><small>fixtures y snapshots</small></div>
+          <div id="trackingTodayOps"></div>
+        </section>
+      </div>
+      <section class="panel">
+        <div class="section-title"><span>Predicciones pendientes</span><small>sin resultado</small></div>
+        <div id="pendingSnapshots" class="empty-state">Sin pendientes cargados.</div>
+      </section>
+      <section class="panel">
+        <div class="section-title"><span>Historial de predicciones</span><small>pendientes y evaluadas</small></div>
+        <div id="predictionHistory" class="empty-state">Sin historial cargado.</div>
+      </section>
+      <section class="panel">
+        <div class="section-title"><span>Detalle de prediccion</span><small>snapshot seleccionado</small></div>
+        <div id="predictionDetail" class="empty-state">Selecciona una prediccion del historial.</div>
+      </section>
+    </section>
+
+    <section class="view" id="view-backtesting">
+      <div class="analysis-grid">
+        <section class="panel">
+          <div class="section-title"><span>Backtest real</span><small>snapshot vs resultado</small></div>
+          <div id="predictionBacktest"></div>
+        </section>
+        <section class="panel">
+          <div class="section-title"><span>Backtest cronologico</span><small>historico</small></div>
+          <div id="backtest"></div>
+          <div id="experiments" class="experiment-list"></div>
+        </section>
+      </div>
+      <section class="panel">
+        <div class="section-title"><span>Ultimos partidos</span><small>datos cargados</small></div>
+        <div id="matches"></div>
+      </section>
+    </section>
+
+    <section class="view" id="view-competitions">
+      <div class="analysis-grid wide-left">
+        <section class="panel">
+          <div class="section-title"><span>Competiciones objetivo</span><small>Europa, America y selecciones</small></div>
+          <div id="competitionCoverage"></div>
+        </section>
+        <section class="panel">
+          <div class="section-title"><span>Fuentes previstas</span><small>estado operativo</small></div>
+          <div class="source-stack">
+            <div class="source-row ready"><b>SQLite local</b><span>activo</span></div>
+            <div class="source-row ready"><b>Ranking FIFA</b><span>activo</span></div>
+            <div class="source-row mixed"><b>API-Football</b><span>parcial por plan</span></div>
+            <div class="source-row pending"><b>Odds / clima / arbitro</b><span>pendiente</span></div>
+            <div class="source-row pending"><b>Jugadores avanzados</b><span>pendiente</span></div>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section class="view" id="view-database">
+      <section class="panel">
+        <div class="section-title"><span>Explorador de datos</span><small>fixtures, partidos y fuentes</small></div>
+        <div id="dataExplorerTotals" class="summary-grid compact-summary"></div>
+        <div class="explorer-filters">
+          <div><label for="explorerSearch">Buscar</label><input id="explorerSearch" placeholder="Equipo, liga, estadio"></div>
+          <div><label for="explorerCompetition">Competicion</label><select id="explorerCompetition"></select></div>
+          <div><label for="explorerStatus">Estado</label><select id="explorerStatus">
+            <option value="all">Todos</option>
+            <option value="upcoming">Proximos</option>
+            <option value="live">En vivo</option>
+            <option value="finished">Finalizados</option>
+          </select></div>
+          <div><label for="explorerFrom">Desde</label><input id="explorerFrom" type="date"></div>
+          <div><label for="explorerTo">Hasta</label><input id="explorerTo" type="date"></div>
+          <button onclick="loadDataExplorer()">Buscar</button>
+        </div>
+        <div id="fixtureExplorer"></div>
+      </section>
+      <section class="panel">
+        <div class="section-title"><span>Resumen por competicion</span><small>cobertura guardada</small></div>
+        <div id="competitionExplorer"></div>
+      </section>
+    </section>
+
+    <section class="view" id="view-data">
+      <div class="analysis-grid wide-left">
+        <section class="panel">
+          <div class="section-title"><span>Calidad de datos</span><small>global y por competicion</small></div>
+          <div id="dataQuality" class="quality-box"></div>
+        </section>
+        <section class="panel">
+          <div class="section-title"><span>Variables listas</span><small>pendientes de conectar</small></div>
+          <div id="pendingData" class="pending-grid"></div>
+        </section>
+      </div>
+    </section>
+
+    <section class="view" id="view-calibration">
+      <div class="analysis-grid">
+        <section class="panel">
+          <div class="section-title"><span>Market bias dashboard</span><small>MAE, RMSE, bias</small></div>
+          <div id="predictionBiases"></div>
+        </section>
+        <section class="panel">
+          <div class="section-title"><span>Calibracion futura</span><small>sin data leakage</small></div>
+          <div id="calibrationPlan" class="calibration-grid"></div>
+        </section>
+      </div>
+    </section>
+
+    <section class="view" id="view-automation">
+      <div class="automation-grid">
+        <section class="panel">
+          <div class="section-title"><span>Pipeline diario</span><small>listo para API paga</small></div>
+          <div class="workflow-list">
+            <div><b>1</b><span>Buscar fixtures del dia</span><em>today-fixtures</em></div>
+            <div><b>2</b><span>Crear snapshots</span><em>predict-today</em></div>
+            <div><b>3</b><span>Actualizar resultados</span><em>update-results</em></div>
+            <div><b>4</b><span>Recalcular metricas</span><em>report</em></div>
+          </div>
+        </section>
+        <section class="panel">
+          <div class="section-title"><span>Comandos</span><small>operacion local</small></div>
+          <div class="command-list">
+            <code>python -m football_predictor.cli today-fixtures</code>
+            <code>python -m football_predictor.cli predict-today</code>
+            <code>python -m football_predictor.cli update-results-from-fixtures</code>
+            <code>python -m football_predictor.cli prediction-backtest-report</code>
+          </div>
+        </section>
+        <section class="panel">
+          <div class="section-title"><span>Presupuesto API</span><small>plan gratis</small></div>
+          <div class="api-sync-controls">
+            <div><label for="apiSyncDate">Fecha</label><input id="apiSyncDate" type="date"></div>
+            <div><label for="apiSyncLeague">Liga ID opcional</label><input id="apiSyncLeague" type="number" min="1" placeholder="Todas"></div>
+            <div><label for="apiSyncSeason">Temporada opcional</label><input id="apiSyncSeason" type="number" min="1900" placeholder="2026"></div>
+            <button onclick="syncTodayFromApi()">Sincronizar API-Football</button>
+          </div>
+          <div id="apiSyncStatus" class="sync-note">Usa 1 request si consultas por fecha sin liga.</div>
+          <div id="apiBudget"></div>
+        </section>
+        <section class="panel">
+          <div class="section-title"><span>Enriquecimiento API</span><small>standings, equipos y detalles</small></div>
+          <div class="api-sync-controls">
+            <div><label for="enrichDate">Fecha</label><input id="enrichDate" type="date"></div>
+            <div><label for="enrichLeague">Liga ID</label><input id="enrichLeague" type="number" min="1" value="1"></div>
+            <div><label for="enrichSeason">Temporada</label><input id="enrichSeason" type="number" min="1900" value="2026"></div>
+            <div><label for="enrichTeamLimit">Equipos max</label><input id="enrichTeamLimit" type="number" min="1" max="100" value="8"></div>
+            <div><label for="enrichFixtureLimit">Fixtures detalle</label><input id="enrichFixtureLimit" type="number" min="0" max="20" value="2"></div>
+            <button onclick="syncApiEnrichment()">Enriquecer datos</button>
+          </div>
+          <div class="api-sync-controls compact-api-controls">
+            <div><label for="enrichFixtureId">Fixture ID</label><input id="enrichFixtureId" type="number" min="1" placeholder="1562344"></div>
+            <button class="secondary" onclick="syncApiStandings()">Solo standings</button>
+            <button class="secondary" onclick="syncApiTeamStats()">Solo team stats</button>
+            <button class="secondary" onclick="syncSelectedFixtureDetails()">Detalle fixture</button>
+          </div>
+          <div id="apiEnrichmentStatus" class="sync-note">Usa limites bajos para pruebas; subelos cuando quieras alimentar una liga completa.</div>
+          <div id="apiEnrichmentSummary"></div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const pct = value => `${(Number(value || 0) * 100).toFixed(1)}%`;
+    const num = value => Number(value || 0).toFixed(1);
+    const fmt = value => value === null || value === undefined ? "-" : value;
+    const cleanError = value => String(value || "Error desconocido").replace(/\s+/g, " ").slice(0, 260);
+    const loadedViews = new Set();
+    const titles = {
+      dashboard: ["Dashboard", "Centro de mando"],
+      prediction: ["Prediccion", "Simulador de partido"],
+      tracking: ["Seguimiento", "Snapshots y resultados"],
+      backtesting: ["Backtesting", "Rendimiento del modelo"],
+      competitions: ["Competiciones", "Cobertura multi-liga"],
+      database: ["Base de datos", "Explorador local"],
+      data: ["Datos", "Calidad y fuentes"],
+      calibration: ["Calibracion", "Sesgos y ajustes"],
+      automation: ["Automatizacion", "Pipeline diario"],
+    };
+
+    document.querySelectorAll(".main-nav button").forEach(button => {
+      button.addEventListener("click", () => showView(button.dataset.view));
+    });
+
+    function showView(name) {
+      document.querySelectorAll(".main-nav button").forEach(button => button.classList.toggle("active", button.dataset.view === name));
+      document.querySelectorAll(".view").forEach(view => view.classList.toggle("active", view.id === `view-${name}`));
+      document.querySelector("#viewEyebrow").textContent = titles[name][0];
+      document.querySelector("#viewTitle").textContent = titles[name][1];
+      loadViewData(name).catch(error => {
+        document.body.insertAdjacentHTML("beforeend", `<pre class="fatal">${cleanError(error.message)}</pre>`);
+      });
+    }
+
+    async function loadViewData(name, force = false) {
+      if (!force && loadedViews.has(name)) return;
+      const loaders = {
+        dashboard: [loadSummary, loadPredictionBacktest, loadDataQuality, loadTodayOperations],
+        prediction: [loadTeams, loadVenues],
+        tracking: [loadTodayOperations, loadBettingBoard, loadPendingSnapshots, loadPredictionHistory, loadPredictionBacktest],
+        backtesting: [loadBacktest, loadPredictionBacktest],
+        competitions: [loadCompetitions],
+        database: [loadDataExplorerCompetitions, loadDataExplorer, loadMatches],
+        data: [loadDataQuality, loadExperiments],
+        calibration: [loadPredictionBacktest],
+        automation: [loadTodayOperations, loadSummary],
+      }[name] || [];
+      await Promise.all(loaders.map(loader => loader()));
+      loadedViews.add(name);
+    }
+
+    async function getJson(url, options) {
+      const response = await fetch(url, options);
+      if (!response.ok) throw new Error(await response.text());
+      return response.json();
+    }
+
+    function currentPayload() {
+      return {
+        home_team: document.querySelector("#homeTeam").value,
+        away_team: document.querySelector("#awayTeam").value,
+        simulations: Number(document.querySelector("#simulationCount").value || 20000),
+        mode: document.querySelector("#simulationMode").value,
+        venue_id: Number(document.querySelector("#venueSelect").value || 0) || null,
+      };
+    }
+
+    async function loadSummary() {
+      const data = await getJson("/api/summary");
+      const items = [
+        ["Equipos", data.teams],
+        ["Partidos", data.matches],
+        ["Predicciones", data.predictions],
+        ["Modelos", data.models],
+        ["Ultima fecha", data.latest_match_date || "-"],
+      ];
+      document.querySelector("#summary").innerHTML = items.map(([label, value]) => `
+        <div class="stat"><span>${label}</span><strong>${value}</strong></div>
+      `).join("");
+    }
+
+    async function loadTeams() {
+      const data = await getJson("/api/teams");
+      const options = data.teams.map(team => `<option value="${team}">${team}</option>`).join("");
+      document.querySelector("#homeTeam").innerHTML = options;
+      document.querySelector("#awayTeam").innerHTML = options;
+      if (data.teams.includes("Mexico")) document.querySelector("#homeTeam").value = "Mexico";
+      if (data.teams.includes("Argentina")) document.querySelector("#awayTeam").value = "Argentina";
+      updateMatchTitle();
+    }
+
+    async function loadVenues() {
+      const data = await getJson("/api/venues");
+      document.querySelector("#venueSelect").innerHTML = [`<option value="">Neutral / sin sede</option>`].concat(
+        data.venues.map(v => `<option value="${v.id}">${v.stadium_name} - ${v.city} - ${v.country} - ${Math.round(v.altitude_m || 0)}m</option>`)
+      ).join("");
+      const azteca = data.venues.find(v => String(v.stadium_name).includes("Azteca"));
+      if (azteca) document.querySelector("#venueSelect").value = azteca.id;
+    }
+
+    function updateMatchTitle() {
+      document.querySelector("#homeName").textContent = document.querySelector("#homeTeam").value || "Local";
+      document.querySelector("#awayName").textContent = document.querySelector("#awayTeam").value || "Visitante";
+    }
+
+    async function loadBacktest() {
+      const data = await getJson("/api/backtest?min_train_matches=8");
+      const m = data.metrics;
+      document.querySelector("#backtest").innerHTML = `
+        <div class="backtest-meter">
+          <div><span>Partidos</span><strong>${m.matches}</strong></div>
+          <div><span>Accuracy</span><strong>${pct(m.accuracy)}</strong></div>
+          <div><span>Confianza</span><strong>${pct(m.avg_confidence)}</strong></div>
+        </div>
+        ${barRow("Accuracy", m.accuracy)}
+        ${barRow("Confianza", m.avg_confidence)}
+        ${barRow("Calibracion", 1 - (m.calibration_error || 0))}
+        <div class="mini-table">
+          <div><span>Log loss</span><b>${num(m.log_loss)}</b></div>
+          <div><span>Brier</span><b>${num(m.brier)}</b></div>
+          <div><span>Favoritos</span><b>${pct(m.favorite_breakdown?.favorite_accuracy || 0)}</b></div>
+        </div>
+      `;
+    }
+
+    async function loadCompetitions() {
+      const data = await getJson("/api/competitions");
+      const regions = Object.entries(data.regions);
+      document.querySelector("#competitionCoverage").innerHTML = `
+        <div class="coverage-head">
+          <div><span>Competiciones</span><strong>${data.totals.competitions}</strong></div>
+          <div><span>Regiones</span><strong>${data.totals.regions}</strong></div>
+          <div><span>Preparadas</span><strong>${data.totals.planned + data.totals.partial}</strong></div>
+        </div>
+        <div class="league-board">
+          ${regions.map(([region, items]) => `
+            <div class="league-region">
+              <h3>${region}</h3>
+              ${items.map(item => `
+                <div class="league-row ${item.status}">
+                  <b>${item.name}</b>
+                  <span>${item.country}</span>
+                  <em>ID ${item.api_football_league_id}</em>
+                </div>
+              `).join("")}
+            </div>
+          `).join("")}
+        </div>
+      `;
+    }
+
+    async function loadPredictionBacktest() {
+      const data = await getJson("/api/prediction-backtests?limit=100");
+      const m = data.metrics;
+      const markets = m.market_metrics || {};
+      const binary = m.binary_metrics || {};
+      const panel = `
+        <div class="backtest-meter">
+          <div><span>Partidos</span><strong>${m.matches}</strong></div>
+          <div><span>Accuracy</span><strong>${pct(m.strict_accuracy)}</strong></div>
+          <div><span>Top 2 score</span><strong>${pct(m.exact_score_top2_accuracy)}</strong></div>
+        </div>
+        <div class="mini-table">
+          <div><span>Log loss 1X2</span><b>${fmtMetric(m.log_loss)}</b></div>
+          <div><span>Brier 1X2</span><b>${fmtMetric(m.brier)}</b></div>
+          <div><span>Over 2.5 Brier</span><b>${fmtMetric(binary.over_2_5?.brier)}</b></div>
+          <div><span>Ambos anotan Brier</span><b>${fmtMetric(binary.both_teams_score?.brier)}</b></div>
+        </div>
+        <div class="table-wrap compact-table">
+          <table>
+            <thead><tr><th>Partido</th><th>Real</th><th>Pick</th><th>Ganador</th><th>Top 2</th></tr></thead>
+            <tbody>
+              ${data.rows.map(row => `
+                <tr>
+                  <td>${row.home_team} vs ${row.away_team}</td>
+                  <td><b>${row.actual_score}</b></td>
+                  <td>${pickLabel(row.predicted_pick)}</td>
+                  <td>${row.winner_hit ? "Acierto" : "Fallo"}</td>
+                  <td>${row.exact_score_top2_hit ? "Acierto" : "-"}</td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        </div>
+      `;
+      document.querySelector("#predictionBacktest").innerHTML = panel;
+      document.querySelector("#dashboardPerformance").innerHTML = panel;
+      const biasPanel = `
+        ${marketErrorCard("Corners", markets.corners)}
+        ${marketErrorCard("Tiros a puerta", markets.shots_on_target)}
+        ${marketErrorCard("Tarjetas", markets.cards)}
+      `;
+      document.querySelector("#predictionBiases").innerHTML = biasPanel;
+      document.querySelector("#dashboardBiases").innerHTML = biasPanel;
+      renderCalibrationPlan(markets);
+    }
+
+    async function loadPredictionHistory() {
+      const data = await getJson("/api/prediction-history?limit=200");
+      const rows = data.rows || [];
+      const counts = data.counts || {};
+      const table = rows.length ? `
+        <div class="history-summary">
+          <div><span>Total</span><b>${counts.total || 0}</b></div>
+          <div><span>Pendientes</span><b>${counts.pending || 0}</b></div>
+          <div><span>Evaluadas</span><b>${counts.evaluated || 0}</b></div>
+        </div>
+        <div class="table-wrap compact-table">
+          <table>
+            <thead>
+              <tr><th>Fecha</th><th>Partido</th><th>Competicion</th><th>Modelo</th><th>Pick</th><th>1X2</th><th>Top score</th><th>Real</th><th>Estado</th><th></th></tr>
+            </thead>
+            <tbody>
+              ${rows.map(row => {
+                const top = row.top_scores?.[0];
+                const real = row.status === "evaluated" ? row.actual_score : "-";
+                const hit = row.status === "evaluated" ? (row.winner_hit ? "Acierto" : "Fallo") : "Pendiente";
+                return `
+                  <tr>
+                    <td>${row.match_date || "-"}</td>
+                    <td>${row.home_team} vs ${row.away_team}</td>
+                    <td>${row.competition || "-"}</td>
+                    <td>${row.model_version || "-"}</td>
+                    <td>${pickLabel(row.predicted_pick)}</td>
+                    <td>${pct(row.predicted_home_prob)} / ${pct(row.predicted_draw_prob)} / ${pct(row.predicted_away_prob)}</td>
+                    <td>${top ? `${top.score} (${pct(top.probability)})` : "-"}</td>
+                    <td>${real}</td>
+                    <td><span class="status-tag ${row.status === "evaluated" ? "finished" : ""}">${hit}</span></td>
+                    <td><button class="small secondary" onclick="showPredictionDetail(${row.id})">Ver</button></td>
+                  </tr>
+                `;
+              }).join("")}
+            </tbody>
+          </table>
+        </div>
+      ` : `<div class="empty-state">Todavia no hay snapshots guardados.</div>`;
+      document.querySelector("#predictionHistory").innerHTML = table;
+    }
+
+    async function showPredictionDetail(id) {
+      const row = await getJson(`/api/prediction-history/${id}`);
+      if (row.error) {
+        document.querySelector("#predictionDetail").innerHTML = `<div class="empty-state">No se encontro esa prediccion.</div>`;
+        return;
+      }
+      const scores = row.top_scores || [];
+      const context = row.match_context || {};
+      const snapshot = row.snapshot || {};
+      const sim = snapshot.simulation || {};
+      const favorite = pickLabel(row.predicted_pick);
+      const confidence = Math.max(Number(row.predicted_home_prob || 0), Number(row.predicted_draw_prob || 0), Number(row.predicted_away_prob || 0));
+      document.querySelector("#predictionDetail").innerHTML = `
+        <div class="detail-hero">
+          <div>
+            <span>${row.match_date || "-"} · ${row.competition || "-"}</span>
+            <h3>${row.home_team} vs ${row.away_team}</h3>
+            <em>${row.model_version || "-"}</em>
+          </div>
+          <div>
+            <span>Recomendacion</span>
+            <strong>${favorite}</strong>
+            <em>Confianza ${pct(confidence)}</em>
+          </div>
+        </div>
+        <div class="odds-grid detail-grid">
+          ${oddsTile("Local", row.predicted_home_prob)}
+          ${oddsTile("Empate", row.predicted_draw_prob)}
+          ${oddsTile("Visitante", row.predicted_away_prob)}
+          ${oddsTile("Over 2.5", row.predicted_over_2_5_prob)}
+          ${oddsTile("Ambos", row.predicted_btts_prob)}
+        </div>
+        <div class="dual">
+          <div>
+            <h3>Marcadores probables</h3>
+            <div class="score-list">${scores.length ? scores.map(score => `<div><b>${score.score}</b><span>${pct(score.probability)}</span></div>`).join("") : `<div><b>-</b><span>Sin marcadores</span></div>`}</div>
+          </div>
+          <div>
+            <h3>Mercados guardados</h3>
+            <div class="mini-table">
+              <div><span>Corners</span><b>${fmtMetric(row.predicted_corners)}</b></div>
+              <div><span>Tiros puerta</span><b>${fmtMetric(row.predicted_shots_on_target)}</b></div>
+              <div><span>Tarjetas</span><b>${fmtMetric(row.predicted_cards)}</b></div>
+            </div>
+          </div>
+        </div>
+        ${renderSavedContext(context)}
+        ${renderPlayerMarkets(snapshot.player_markets || {})}
+        ${renderSnapshotFactors(sim, snapshot.data_quality)}
+        ${renderSavedEvaluation(row)}
+      `;
+      document.querySelector("#predictionDetail").scrollIntoView({behavior: "smooth", block: "start"});
+    }
+
+    function renderSavedContext(context) {
+      if (!context || !Object.keys(context).length) {
+        return `<div class="sensitivity"><h3>Contexto</h3><div class="empty-state">Sin contexto guardado para este partido.</div></div>`;
+      }
+      return `
+        <div class="sensitivity">
+          <h3>Contexto usado</h3>
+          <div class="context-strip">
+            <div><span>Fase</span><strong>${context.stage_label || context.stage || "-"}</strong></div>
+            <div><span>Tipo</span><strong>${context.competition_type || "-"}</strong></div>
+            <div><span>Presion</span><strong>${num(context.pressure_index || 50)}</strong></div>
+            <div><span>Rotacion</span><strong>${num(context.rotation_risk || 50)}</strong></div>
+            <div><span>Empate</span><strong>${num(context.draw_acceptance || 50)}</strong></div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderSnapshotFactors(simulation, dataQuality) {
+      const factors = simulation.factor_cards || [];
+      const sensitivity = simulation.sensitivity || [];
+      const quality = dataQuality || {};
+      if (!factors.length && !sensitivity.length && !quality.score) return "";
+      return `
+        <div class="sensitivity">
+          <h3>Factores guardados</h3>
+          <div class="factor-grid">
+            ${factors.slice(0, 8).map(card => `
+              <div class="factor-card">
+                <div class="factor-head"><span>${card.name}</span><b>${card.edge > 0 ? "+" : ""}${num(card.edge)}</b></div>
+                <div class="versus">
+                  <span>${num(card.home)}</span>
+                  <div class="rail"><i style="width:${Math.max(3, Math.min(100, card.home))}%"></i></div>
+                  <span>${num(card.away)}</span>
+                </div>
+              </div>
+            `).join("")}
+          </div>
+          ${sensitivity.length ? `
+            <h3>Sensibilidad guardada</h3>
+            ${sensitivity.slice(0, 6).map(row => `
+              <div class="sensitivity-row"><b>${row.factor}</b><span>${row.direction}</span><em>${pct(row.estimated_probability_impact)}</em></div>
+            `).join("")}
+          ` : ""}
+          ${quality.score ? `<div class="calibration-note">Calidad de datos al predecir: ${pct(quality.score)}</div>` : ""}
+        </div>
+      `;
+    }
+
+    function renderSavedEvaluation(row) {
+      if (row.status !== "evaluated") {
+        return `
+          <div class="sensitivity">
+            <h3>Evaluacion</h3>
+            <div class="empty-state">Pendiente de resultado real. Cuando API-Football marque el partido como finalizado, el ciclo automatico puede completar esta seccion.</div>
+          </div>
+        `;
+      }
+      const errors = row.market_errors || {};
+      return `
+        <div class="sensitivity">
+          <h3>Evaluacion</h3>
+          <div class="mini-table">
+            <div><span>Resultado</span><b>${row.actual_score}</b></div>
+            <div><span>Ganador</span><b>${row.winner_hit ? "Acierto" : "Fallo"}</b></div>
+            <div><span>Top 2 score</span><b>${row.exact_score_top2_hit ? "Acierto" : "-"}</b></div>
+            <div><span>Outcome</span><b>${pickLabel(row.actual_outcome)}</b></div>
+          </div>
+          <div class="market-error-grid">
+            ${marketErrorDetail("Corners", errors.corners)}
+            ${marketErrorDetail("Tiros puerta", errors.shots_on_target)}
+            ${marketErrorDetail("Tarjetas", errors.cards)}
+          </div>
+        </div>
+      `;
+    }
+
+    function marketErrorDetail(label, item) {
+      if (!item) return `<div class="bias-card"><b>${label}</b><span>Sin dato real</span></div>`;
+      return `
+        <div class="bias-card ${item.direction}">
+          <b>${label}</b>
+          <span>Pred. ${fmtMetric(item.predicted)} · Real ${fmtMetric(item.actual)}</span>
+          <em>Error ${fmtMetric(item.error)} · MAE ${fmtMetric(item.absolute_error)}</em>
+        </div>
+      `;
+    }
+
+    async function loadPendingSnapshots() {
+      const data = await getJson("/api/tracking/pending");
+      const pending = data.pending || [];
+      document.querySelector("#pendingSelect").innerHTML = pending.map(row => `
+        <option value="${row.id}">${row.match_date} - ${row.home_team} vs ${row.away_team}</option>
+      `).join("");
+      const content = pending.length ? `
+        <div class="table-wrap compact-table">
+          <table>
+            <thead><tr><th>Fecha</th><th>Partido</th><th>Pick</th><th>Modelo</th><th></th></tr></thead>
+            <tbody>
+              ${pending.slice(0, 8).map(row => `
+                <tr>
+                  <td>${row.match_date}</td>
+                  <td>${row.home_team} vs ${row.away_team}</td>
+                  <td>${pickLabel(row.predicted_pick)}</td>
+                  <td>${row.model_version}</td>
+                  <td><button class="danger small" onclick="deleteSnapshot(${row.id})">Borrar</button></td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        </div>
+      ` : `<div class="empty-state">Sin predicciones pendientes de resultado.</div>`;
+      document.querySelector("#pendingSnapshots").innerHTML = content;
+      document.querySelector("#dashboardPending").innerHTML = content;
+    }
+
+    async function deleteSnapshot(id) {
+      await getJson(`/api/tracking/snapshot/${id}`, {method: "DELETE"});
+      document.querySelector("#quickStatus").textContent = "Snapshot borrado";
+      await Promise.all([loadPendingSnapshots(), loadPredictionBacktest(), loadSummary(), loadTodayOperations()]);
+    }
+
+    async function syncTodayFromApi() {
+      const payload = {
+        date: document.querySelector("#apiSyncDate").value || null,
+        league: Number(document.querySelector("#apiSyncLeague").value || 0) || null,
+        season: Number(document.querySelector("#apiSyncSeason").value || 0) || null,
+      };
+      document.querySelector("#apiSyncStatus").textContent = "Sincronizando con API-Football...";
+      const data = await getJson("/api/operations/sync-today", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(payload),
+      });
+      document.querySelector("#apiSyncStatus").textContent = `Fixtures guardados: ${data.fixtures || 0}. Partidos finalizados insertados: ${data.finished_matches_inserted || 0}.`;
+      await Promise.all([loadTodayOperations(), loadMatches(), loadSummary(), loadDataQuality()]);
+    }
+
+    function enrichmentPayload() {
+      return {
+        date: document.querySelector("#enrichDate").value || new Date().toISOString().slice(0, 10),
+        league: Number(document.querySelector("#enrichLeague").value || 1),
+        season: Number(document.querySelector("#enrichSeason").value || 2026),
+        team_limit: Number(document.querySelector("#enrichTeamLimit").value || 0) || null,
+        fixture_limit: Number(document.querySelector("#enrichFixtureLimit").value || 0),
+      };
+    }
+
+    async function runEnrichmentAction(loadingText, action) {
+      const status = document.querySelector("#apiEnrichmentStatus");
+      status.classList.remove("error");
+      status.textContent = loadingText;
+      try {
+        const result = await action();
+        status.textContent = result.message;
+        document.querySelector("#apiEnrichmentSummary").innerHTML = result.html || "";
+        await Promise.all([loadDataQuality(), loadTodayOperations(), loadDataExplorer(), loadSummary()]);
+      } catch (error) {
+        status.classList.add("error");
+        status.textContent = `Error: ${cleanError(error.message)}`;
+      }
+    }
+
+    async function syncApiStandings() {
+      const payload = enrichmentPayload();
+      await runEnrichmentAction("Actualizando tabla/standings...", async () => {
+        const data = await getJson("/api/operations/sync-standings", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({league: payload.league, season: payload.season}),
+        });
+        return {
+          message: `Standings guardados: ${data.standings || 0}.`,
+          html: enrichmentSummaryCards([{label: "Standings", value: data.standings || 0}, {label: "API results", value: data.api_results || 0}]),
+        };
+      });
+    }
+
+    async function syncApiTeamStats() {
+      const payload = enrichmentPayload();
+      await runEnrichmentAction("Actualizando estadisticas por equipo...", async () => {
+        const data = await getJson("/api/operations/sync-team-stats", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({league: payload.league, season: payload.season, team_limit: payload.team_limit}),
+        });
+        return {
+          message: `Team stats guardados: ${data.team_statistics || 0}. Requests usados: ${data.requests_used || 0}.`,
+          html: enrichmentSummaryCards([{label: "Team stats", value: data.team_statistics || 0}, {label: "Requests", value: data.requests_used || 0}, {label: "Errores", value: (data.errors || []).length}]),
+        };
+      });
+    }
+
+    async function syncSelectedFixtureDetails() {
+      const fixtureId = Number(document.querySelector("#enrichFixtureId").value || 0);
+      if (!fixtureId) {
+        document.querySelector("#apiEnrichmentStatus").classList.add("error");
+        document.querySelector("#apiEnrichmentStatus").textContent = "Escribe un Fixture ID valido.";
+        return;
+      }
+      await runEnrichmentAction("Actualizando detalles del fixture...", async () => {
+        const data = await getJson("/api/operations/sync-fixture-details", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({fixture_id: fixtureId}),
+        });
+        return {
+          message: `Fixture ${fixtureId} enriquecido.`,
+          html: enrichmentSummaryCards([
+            {label: "Stats avanzadas", value: data.advanced_stats || 0},
+            {label: "Bajas", value: data.availability_rows || 0},
+            {label: "Lineups", value: data.lineups || 0},
+            {label: "Jugadores", value: data.lineup_players || 0},
+          ]),
+        };
+      });
+    }
+
+    async function syncApiEnrichment() {
+      const payload = enrichmentPayload();
+      await runEnrichmentAction("Enriqueciendo datos de API-Football...", async () => {
+        const data = await getJson("/api/operations/sync-enrichment", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(payload),
+        });
+        const detailStats = (data.fixture_details || []).reduce((acc, row) => {
+          acc.advanced += row.advanced_stats || 0;
+          acc.availability += row.availability_rows || 0;
+          acc.lineups += row.lineups || 0;
+          acc.players += row.lineup_players || 0;
+          return acc;
+        }, {advanced: 0, availability: 0, lineups: 0, players: 0});
+        return {
+          message: `Enriquecimiento listo. Requests estimados: ${data.requests_estimated || 0}.`,
+          html: enrichmentSummaryCards([
+            {label: "Standings", value: data.standings?.standings || 0},
+            {label: "Team stats", value: data.team_stats?.team_statistics || 0},
+            {label: "Fixtures detalle", value: (data.fixture_details || []).length},
+            {label: "Stats avanzadas", value: detailStats.advanced},
+            {label: "Lineups", value: detailStats.lineups},
+            {label: "Jugadores", value: detailStats.players},
+          ]),
+        };
+      });
+    }
+
+    function enrichmentSummaryCards(items) {
+      return `<div class="summary-grid compact-summary">${items.map(item => `
+        <div class="mini-card"><span>${item.label}</span><b>${fmt(item.value)}</b></div>
+      `).join("")}</div>`;
+    }
+
+    function dailyPayload() {
+      return {
+        date: document.querySelector("#dailyDate").value || new Date().toISOString().slice(0, 10),
+        league: Number(document.querySelector("#dailyLeague").value || 0) || null,
+        season: Number(document.querySelector("#dailySeason").value || 0) || null,
+        simulations: Number(document.querySelector("#dailySimulations").value || 5000),
+        configured_only: document.querySelector("#dailyConfiguredOnly").checked,
+        range_days: Number(document.querySelector("#dailyRangeDays").value || 3),
+      };
+    }
+
+    async function runDailySync() {
+      const payload = dailyPayload();
+      await runDailyAction("Sincronizando fixtures del dia...", async () => {
+        const data = await getJson("/api/operations/sync-today", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({date: payload.date, league: payload.league, season: payload.season, range_days: payload.range_days}),
+        });
+        return `Fixtures guardados: ${data.fixtures || 0}. Ventana: ${(data.dates || []).join(" - ")}. Resultados insertados: ${data.finished_matches_inserted || 0}.`;
+      });
+    }
+
+    async function runDailyPredictions() {
+      const payload = dailyPayload();
+      await runDailyAction("Creando snapshots automaticos...", async () => {
+        const data = await getJson("/api/operations/predict-today", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(payload),
+        });
+        return `Predicciones guardadas: ${data.predictions_created || 0}. Fixtures usados: ${data.fixtures || 0}. Ventana: ${(data.dates || []).length} dias.`;
+      });
+    }
+
+    async function runDailyResults() {
+      const payload = dailyPayload();
+      await runDailyAction("Actualizando resultados reales...", async () => {
+        const data = await getJson("/api/operations/update-results", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({date: payload.date, range_days: payload.range_days}),
+        });
+        return `Resultados actualizados: ${data.results_updated || 0}. Fixtures finalizados: ${data.finished_fixtures || 0}.`;
+      });
+    }
+
+    async function runPendingReconciliation() {
+      await runDailyAction("Buscando resultados pendientes atrasados...", async () => {
+        const data = await getJson("/api/operations/reconcile-pending-results", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({max_dates: 7, sync_api: true}),
+        });
+        return `Rescate listo. Actualizados: ${data.results_updated || 0}. Pendientes: ${data.pending_before || 0} -> ${data.pending_after || 0}. Fechas revisadas: ${(data.dates_checked || []).length}.`;
+      });
+    }
+
+    async function runDailyPipeline() {
+      const payload = {...dailyPayload(), sync_first: true};
+      await runDailyAction("Ejecutando ciclo completo...", async () => {
+        const data = await getJson("/api/operations/run-daily", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(payload),
+        });
+        const synced = data.sync?.fixtures ?? "sin sync";
+        const created = data.predictions?.predictions_created || 0;
+        const updated = data.results?.results_updated || 0;
+        const rescued = data.pending_reconciliation?.results_updated || 0;
+        return `Ciclo listo. Sync: ${synced}. Predicciones: ${created}. Resultados: ${updated}. Rescate local: ${rescued}.`;
+      });
+    }
+
+    async function runDailyAction(loadingText, action) {
+      const status = document.querySelector("#dailyOpsStatus");
+      status.classList.remove("error");
+      status.textContent = loadingText;
+      try {
+        status.textContent = await action();
+        await refreshTrackingPanels();
+      } catch (error) {
+        status.classList.add("error");
+        status.textContent = `Error: ${cleanError(error.message)}`;
+      }
+    }
+
+    async function refreshTrackingPanels() {
+      const jobs = [loadTodayOperations(), loadBettingBoard(), loadPendingSnapshots(), loadPredictionBacktest(), loadPredictionHistory(), loadMatches(), loadSummary(), loadDataQuality()];
+      const results = await Promise.allSettled(jobs);
+      const failed = results.find(result => result.status === "rejected");
+      if (failed) throw failed.reason;
+    }
+
+    async function loadTodayOperations() {
+      const target = document.querySelector("#dailyDate")?.value || document.querySelector("#apiSyncDate")?.value || "";
+      const rangeDays = Number(document.querySelector("#dailyRangeDays")?.value || 3);
+      const params = new URLSearchParams();
+      if (target) params.set("target_date", target);
+      params.set("range_days", String(rangeDays));
+      const data = await getJson(`/api/operations/today?${params.toString()}`);
+      const counts = data.counts || {};
+      const budget = data.api_budget || {};
+      const usage = budget.free_daily_limit ? Math.min(1, budget.estimated_minimum / budget.free_daily_limit) : 0;
+      const fixtures = data.fixtures || [];
+      const panel = `
+        <div class="budget-grid">
+          <div><span>Ventana</span><b>${(data.dates || [data.date]).join(" → ")}</b></div>
+          <div><span>Fixtures cargados</span><b>${counts.fixtures_today || 0}</b></div>
+          <div><span>Fixtures objetivo</span><b>${counts.configured_fixtures_today || 0}</b></div>
+          <div><span>Prioridad</span><b>${counts.priority_fixtures_today || 0}</b></div>
+          <div><span>Snapshots pendientes</span><b>${counts.pending_snapshots || 0}</b></div>
+          <div><span>Requests min.</span><b>${budget.estimated_minimum || 0}/${budget.free_daily_limit || 100}</b></div>
+        </div>
+        ${barRow("Uso estimado", usage)}
+        <div class="fixture-list">
+          ${fixtures.length ? fixtures.slice(0, 8).map(row => `
+            <div class="fixture-row">
+              <b>${row.home_team} vs ${row.away_team}</b>
+              <span>${row.league_name || "Sin liga"} - ${row.status_short || "-"}${row.priority ? " - prioridad" : row.configured ? " - objetivo" : ""}</span>
+              <em>${row.venue_name || row.venue_city || "-"}</em>
+            </div>
+          `).join("") : `<div class="empty-state">No hay fixtures API cargados para hoy. Cuando conectes la API, este panel muestra el plan diario.</div>`}
+        </div>
+      `;
+      document.querySelector("#todayOps").innerHTML = panel;
+      document.querySelector("#trackingTodayOps").innerHTML = panel;
+      document.querySelector("#apiBudget").innerHTML = `
+        ${panel}
+        <div class="mini-table">
+          <div><span>Escaneo prioridad</span><b>${budget.fixtures_scan_priority || 0}</b></div>
+          <div><span>Escaneo completo</span><b>${budget.fixtures_scan_all || 0}</b></div>
+          <div><span>Detalles minimo</span><b>${budget.details_minimum || 0}</b></div>
+          <div><span>Detalles completo</span><b>${budget.details_full || 0}</b></div>
+        </div>
+      `;
+    }
+
+    async function loadDataQuality() {
+      const data = await getJson("/api/data-quality");
+      const groups = Object.values(data.groups);
+      const readiness = data.readiness || {};
+      const competitions = data.competition_coverage || [];
+      const content = `
+        <div class="quality-score">
+          <span>Calidad de datos</span>
+          <strong>${pct(data.score)}</strong>
+        </div>
+        <div class="readiness-strip">
+          <div><span>API readiness</span><b>${pct(readiness.ready_ratio || 0)}</b></div>
+          <div><span>Fuentes listas</span><b>${readiness.ready_count || 0}/${readiness.total || 0}</b></div>
+          <div><span>Competiciones</span><b>${competitions.length}</b></div>
+        </div>
+        <div class="quality-grid">
+          ${groups.map(group => `
+            <div class="quality-pill ${group.status}">
+              <b>${group.label}</b>
+              <span>${group.status} - ${group.count}</span>
+              ${group.details ? `<em>${Object.entries(group.details).map(([key, value]) => `${key}: ${value}`).join(" · ")}</em>` : ""}
+            </div>
+          `).join("")}
+        </div>
+        <div class="coverage-table">
+          <h3>Cobertura por competicion</h3>
+          <div class="table-wrap compact-table">
+            <table>
+              <thead><tr><th>Competicion</th><th>Region</th><th>Datos</th><th>Score</th></tr></thead>
+              <tbody>
+                ${competitions.slice(0, 12).map(item => `
+                  <tr>
+                    <td>${item.name}</td>
+                    <td>${item.region}</td>
+                    <td>${item.matches} / ${item.fixtures}</td>
+                    <td><b>${pct(item.coverage_score)}</b></td>
+                  </tr>
+                `).join("")}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+      document.querySelector("#dataQuality").innerHTML = content;
+      document.querySelector("#systemHealth").innerHTML = content;
+    }
+
+    async function loadExperiments() {
+      const data = await getJson("/api/experiments?limit=5");
+      document.querySelector("#experiments").innerHTML = `
+        <h3>Experimentos recientes</h3>
+        ${data.experiments.map(exp => `
+          <div class="experiment-row">
+            <b>${exp.kind}</b>
+            <span>${exp.name}</span>
+            <em>${exp.created_at}</em>
+          </div>
+        `).join("")}
+      `;
+    }
+
+    async function loadMatches() {
+      const data = await getJson("/api/matches?limit=12");
+      document.querySelector("#matches").innerHTML = `
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Fecha</th><th>Local</th><th></th><th>Visitante</th><th>Competicion</th></tr></thead>
+            <tbody>
+              ${data.matches.map(m => `
+                <tr>
+                  <td>${m.date}</td>
+                  <td>${m.home_team}</td>
+                  <td><b>${fmt(m.home_goals)}-${fmt(m.away_goals)}</b></td>
+                  <td>${m.away_team}</td>
+                  <td>${m.competition}</td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    async function loadBettingBoard() {
+      const target = document.querySelector("#dailyDate")?.value || new Date().toISOString().slice(0, 10);
+      const rangeDays = Number(document.querySelector("#dailyRangeDays")?.value || 3);
+      const data = await getJson(`/api/operations/betting-board?target_date=${target}&range_days=${rangeDays}`);
+      const rows = data.rows || [];
+      document.querySelector("#bettingBoard").classList.toggle("empty-state", !rows.length);
+      document.querySelector("#bettingBoard").innerHTML = rows.length ? `
+        <div class="betting-head">
+          <div><span>Ventana</span><b>${(data.dates || []).join(" → ")}</b></div>
+          <div><span>Picks</span><b>${rows.length}</b></div>
+        </div>
+        <div class="betting-list">
+          ${rows.map(row => bettingRow(row)).join("")}
+        </div>
+      ` : "Sin snapshots con picks en esta ventana. Usa Predecir dia para generarlos.";
+    }
+
+    function bettingRow(row) {
+      const pick = row.best_pick || {};
+      const confidence = pick.confidence || "baja";
+      return `
+        <div class="betting-row ${confidence}">
+          <div>
+            <b>${row.home_team} vs ${row.away_team}</b>
+            <span>${row.match_date} · ${row.competition}</span>
+          </div>
+          <div>
+            <em>${pick.market || "-"}</em>
+            <strong>${pick.pick || "-"}</strong>
+          </div>
+          <div>
+            <em>Probabilidad</em>
+            <strong>${pct(pick.probability || 0)}</strong>
+          </div>
+          <div>
+            <em>Confianza</em>
+            <strong>${confidence}</strong>
+          </div>
+        </div>
+      `;
+    }
+
+    async function loadDataExplorerCompetitions() {
+      const data = await getJson("/api/data-explorer/competitions");
+      const competitions = data.competitions || [];
+      const current = document.querySelector("#explorerCompetition").value;
+      document.querySelector("#explorerCompetition").innerHTML = [`<option value="">Todas</option>`].concat(
+        competitions.map(row => `<option value="${escapeAttr(row.competition)}">${row.competition} (${row.rows})</option>`)
+      ).join("");
+      if (current) document.querySelector("#explorerCompetition").value = current;
+      document.querySelector("#competitionExplorer").innerHTML = competitions.length ? `
+        <div class="table-wrap compact-table">
+          <table>
+            <thead><tr><th>Competicion</th><th>Temporada</th><th>Registros</th><th>Finalizados</th><th>Proximos</th><th>Rango</th><th>Fuente</th></tr></thead>
+            <tbody>
+              ${competitions.slice(0, 80).map(row => `
+                <tr>
+                  <td><b>${row.competition}</b></td>
+                  <td>${row.season}</td>
+                  <td>${row.rows}</td>
+                  <td>${row.finished || 0}</td>
+                  <td>${row.upcoming || 0}</td>
+                  <td>${fmt(row.first_date)} - ${fmt(row.last_date)}</td>
+                  <td>${row.sources || "-"}</td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        </div>
+      ` : `<div class="empty-state">Todavia no hay competiciones guardadas.</div>`;
+    }
+
+    async function loadDataExplorer() {
+      const params = new URLSearchParams();
+      const fields = [
+        ["search", "#explorerSearch"],
+        ["competition", "#explorerCompetition"],
+        ["status", "#explorerStatus"],
+        ["date_from", "#explorerFrom"],
+        ["date_to", "#explorerTo"],
+      ];
+      fields.forEach(([key, selector]) => {
+        const value = document.querySelector(selector).value;
+        if (value) params.set(key, value);
+      });
+      params.set("limit", "150");
+      const data = await getJson(`/api/data-explorer/fixtures?${params.toString()}`);
+      const totals = data.totals || {};
+      const fixtures = data.fixtures || [];
+      const summary = [
+        ["Historicos", totals.historical_matches || 0],
+        ["API fixtures", totals.api_fixtures || 0],
+        ["Competiciones API", totals.api_competitions || 0],
+        ["API finalizados", totals.api_finished || 0],
+        ["API proximos", totals.api_upcoming || 0],
+      ];
+      document.querySelector("#dataExplorerTotals").innerHTML = summary.map(([label, value]) => `
+        <div class="stat"><span>${label}</span><strong>${value}</strong></div>
+      `).join("");
+      document.querySelector("#fixtureExplorer").innerHTML = fixtures.length ? `
+        <div class="table-wrap explorer-table">
+          <table>
+            <thead><tr><th>Fecha</th><th>Competicion</th><th>Partido</th><th>Marcador</th><th>Estado</th><th>Sede</th><th>Fuente</th><th>ID API</th></tr></thead>
+            <tbody>
+              ${fixtures.map(row => `
+                <tr>
+                  <td>${fmt(row.match_date)}</td>
+                  <td>${fmt(row.competition)}</td>
+                  <td><b>${fmt(row.home_team)}</b> vs <b>${fmt(row.away_team)}</b></td>
+                  <td>${fmt(row.score)}</td>
+                  <td><span class="status-tag ${row.status_group}">${fmt(row.status)}</span></td>
+                  <td>${fmt(row.venue_name || row.venue_city)}</td>
+                  <td>${fmt(row.source)}</td>
+                  <td>${fmt(row.api_fixture_id)}</td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        </div>
+      ` : `<div class="empty-state">No hay registros con esos filtros.</div>`;
+    }
+
+    async function runPrediction() {
+      updateMatchTitle();
+      const payload = {
+        home_team: document.querySelector("#homeTeam").value,
+        away_team: document.querySelector("#awayTeam").value,
+        save: document.querySelector("#savePrediction").checked,
+      };
+      const data = await getJson("/api/predict", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(payload),
+      });
+      const decision = decisionSummary(data);
+      document.querySelector("#quickStatus").textContent = `${decision.confidence} confianza`;
+      document.querySelector("#predictionPanel").innerHTML = `
+        <div class="decision-hero ${decision.side}">
+          <span>Favorito</span>
+          <strong>${decision.label}</strong>
+          <em>${pct(decision.probability)} · ${decision.confidence}</em>
+        </div>
+        <div class="recommendation-strip">
+          <b>${decision.recommendation}</b>
+          <span>Marcador base ${data.most_likely_score}</span>
+        </div>
+        <div class="prob-stack">
+          ${probLine("Local", data.home_win_prob, "home")}
+          ${probLine("Empate", data.draw_prob, "draw")}
+          ${probLine("Visitante", data.away_win_prob, "away")}
+        </div>
+        <div class="mini-table">
+          <div><span>Marcador</span><b>${data.most_likely_score}</b></div>
+          <div><span>Over 2.5</span><b>${pct(data.over_2_5_prob)}</b></div>
+          <div><span>Ambos anotan</span><b>${pct(data.both_teams_score_prob)}</b></div>
+          ${data.id ? `<div><span>ID</span><b>${data.id}</b></div>` : ""}
+        </div>
+        ${renderPlayerMarkets(data.player_markets || {})}
+      `;
+      loadSummary();
+    }
+
+    function decisionSummary(data) {
+      const home = Number(data.home_win_prob ?? data.home_win ?? 0);
+      const draw = Number(data.draw_prob ?? data.draw ?? 0);
+      const away = Number(data.away_win_prob ?? data.away_win ?? 0);
+      const rows = [
+        {side: "home", label: document.querySelector("#homeTeam")?.value || "Local", probability: home},
+        {side: "draw", label: "Empate", probability: draw},
+        {side: "away", label: document.querySelector("#awayTeam")?.value || "Visitante", probability: away},
+      ].sort((a, b) => b.probability - a.probability);
+      const top = rows[0];
+      const margin = top.probability - rows[1].probability;
+      let confidence = "Baja";
+      if (top.probability >= 0.62 && margin >= 0.18) confidence = "Alta";
+      else if (top.probability >= 0.48 && margin >= 0.1) confidence = "Media";
+      const recommendation = top.side === "draw"
+        ? "Partido cerrado: evita ganador directo"
+        : confidence === "Alta"
+          ? `Lean fuerte: ${top.label}`
+          : `Lean prudente: ${top.label}`;
+      return {...top, confidence, margin, recommendation};
+    }
+
+    async function saveSnapshot() {
+      updateMatchTitle();
+      const payload = {
+        ...currentPayload(),
+        match_date: document.querySelector("#trackingDate").value || new Date().toISOString().slice(0, 10),
+        competition: document.querySelector("#trackingCompetition").value || "Manual",
+        model_version: "ui_manual_snapshot",
+      };
+      const data = await getJson("/api/tracking/snapshot", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(payload),
+      });
+      document.querySelector("#quickStatus").textContent = "Snapshot guardado";
+      await Promise.all([loadPendingSnapshots(), loadPredictionBacktest(), loadSummary()]);
+      return data;
+    }
+
+    async function saveResult() {
+      const id = document.querySelector("#pendingSelect").value;
+      if (!id) return;
+      const optionalNumber = selector => {
+        const value = document.querySelector(selector).value;
+        return value === "" ? null : Number(value);
+      };
+      await getJson(`/api/tracking/result/${id}`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+          actual_home_goals: Number(document.querySelector("#actualHomeGoals").value || 0),
+          actual_away_goals: Number(document.querySelector("#actualAwayGoals").value || 0),
+          actual_corners: optionalNumber("#actualCorners"),
+          actual_shots_on_target: optionalNumber("#actualShots"),
+          actual_cards: optionalNumber("#actualCards"),
+          notes: "Resultado cargado desde interfaz",
+        }),
+      });
+      document.querySelector("#quickStatus").textContent = "Resultado guardado";
+      await Promise.all([loadPendingSnapshots(), loadPredictionBacktest()]);
+    }
+
+    async function runSimulation() {
+      updateMatchTitle();
+      const data = await getJson("/api/simulate/advanced", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(currentPayload()),
+      });
+      renderSimulation(data);
+      renderFactors(data.factor_cards || []);
+      renderProfiles(data.profiles);
+      renderPending(data.profiles?.home?.pending_data || {});
+    }
+
+    function renderSimulation(data) {
+      const s = data.simulation;
+      const scenarios = data.scenario_mix || {};
+      const decision = decisionSummary({home_win: s.home_win, draw: s.draw, away_win: s.away_win});
+      document.querySelector("#simulationPanel").innerHTML = `
+        <div class="simulation-decision ${decision.side}">
+          <div>
+            <span>Lectura principal</span>
+            <strong>${decision.label}</strong>
+            <em>${decision.recommendation}</em>
+          </div>
+          <b>${pct(decision.probability)}</b>
+        </div>
+        <div class="sim-top">
+          <div><span>Modo</span><strong>${data.mode}</strong></div>
+          <div><span>Corridas</span><strong>${data.simulations.toLocaleString()}</strong></div>
+          <div><span>Edge factores</span><strong>${num(data.factor_edge * 100)}%</strong></div>
+          <div><span>Edge sede</span><strong>${num((data.venue_edge || 0) * 100)}%</strong></div>
+        </div>
+        ${renderContext(data.match_context)}
+        <div class="odds-grid">
+          ${oddsTile("Local", s.home_win)}
+          ${oddsTile("Empate", s.draw)}
+          ${oddsTile("Visitante", s.away_win)}
+          ${oddsTile("Over 2.5", s.over_2_5)}
+          ${oddsTile("Ambos", s.both_teams_score)}
+        </div>
+        <div class="dual">
+          <div>
+            <h3>Marcadores</h3>
+            <div class="score-list">${data.top_scores.map(row => `<div><b>${row.score}</b><span>${pct(row.probability)}</span></div>`).join("")}</div>
+          </div>
+          <div>
+            <h3>Escenarios poker</h3>
+            ${Object.entries(scenarios).map(([k, v]) => barRow(k, v)).join("")}
+          </div>
+        </div>
+        <div class="sensitivity">
+          <h3>Sensibilidad</h3>
+          ${(data.sensitivity || []).slice(0, 6).map(row => `
+            <div class="sensitivity-row"><b>${row.factor}</b><span>${row.direction}</span><em>${pct(row.estimated_probability_impact)}</em></div>
+          `).join("")}
+        </div>
+        ${renderMarkets(data.secondary_markets || {})}
+        ${renderPlayerMarkets(data.player_markets || {})}
+      `;
+    }
+
+    function renderContext(context) {
+      if (!context) return "";
+      return `
+        <div class="context-strip">
+          <div><span>Contexto</span><strong>${context.stage_label || context.stage || "Sin clasificar"}</strong></div>
+          <div><span>Tipo</span><strong>${context.competition_type || "-"}</strong></div>
+          <div><span>Presion</span><strong>${num(context.pressure_index || 50)}</strong></div>
+          <div><span>Rotacion</span><strong>${num(context.rotation_risk || 50)}</strong></div>
+          <div><span>Empate</span><strong>${num(context.draw_acceptance || 50)}</strong></div>
+        </div>
+      `;
+    }
+
+    function renderMarkets(markets) {
+      if (!Object.keys(markets).length) return "";
+      return `
+        <div class="sensitivity">
+          <h3>Mercados secundarios</h3>
+          <div class="odds-grid">
+            ${marketTile("Corners", num(markets.total_corners_expected))}
+            ${oddsTile("Over 8.5 corners", markets.over_8_5_corners_prob)}
+            ${marketTile("Tarjetas", num(markets.total_cards_expected))}
+            ${oddsTile("Over 3.5 tarjetas", markets.over_3_5_cards_prob)}
+            ${marketTile("Tiros a puerta", num(markets.shots_on_target_expected))}
+          </div>
+          ${markets.calibration?.applied ? `<div class="calibration-note">Calibracion aplicada sobre sesgos reales.</div>` : ""}
+        </div>
+      `;
+    }
+
+    function renderPlayerMarkets(playerMarkets) {
+      if (!playerMarkets || !Object.keys(playerMarkets).length) return "";
+      const scorers = playerMarkets.top_scorers || [];
+      const shots = playerMarkets.top_shots_on_target || [];
+      const home = playerMarkets.home_team || {};
+      const away = playerMarkets.away_team || {};
+      const rows = (items, metric) => items.slice(0, 5).map(player => `
+        <div class="player-market-row">
+          <div><b>${player.player_name}</b><span>${player.team} · ${player.position || "-"}</span></div>
+          <strong>${metric === "goal" ? pct(player.score_prob) : pct(player.shot_on_target_prob)}</strong>
+          <em>${player.confidence}</em>
+        </div>
+      `).join("");
+      return `
+        <div class="sensitivity player-markets">
+          <h3>Mercados de jugadores</h3>
+          <div class="context-strip">
+            <div><span>${home.team || "Local"}</span><strong>${num(home.expected_shots_on_target || 0)} TA</strong></div>
+            <div><span>${away.team || "Visitante"}</span><strong>${num(away.expected_shots_on_target || 0)} TA</strong></div>
+            <div><span>Cobertura local</span><strong>${home.coverage || "-"}</strong></div>
+            <div><span>Cobertura visita</span><strong>${away.coverage || "-"}</strong></div>
+          </div>
+          <div class="dual">
+            <div>
+              <h3>Posible goleador</h3>
+              <div class="player-market-list">${rows(scorers, "goal") || `<div class="empty-state">Sin datos de jugadores.</div>`}</div>
+            </div>
+            <div>
+              <h3>Tiro a puerta</h3>
+              <div class="player-market-list">${rows(shots, "sot") || `<div class="empty-state">Sin datos de tiros.</div>`}</div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderFactors(cards) {
+      document.querySelector("#factorCards").innerHTML = cards.map(card => `
+        <div class="factor-card">
+          <div class="factor-head"><span>${card.name}</span><b>${card.edge > 0 ? "+" : ""}${num(card.edge)}</b></div>
+          <div class="versus">
+            <span>${num(card.home)}</span>
+            <div class="rail"><i style="width:${Math.max(3, Math.min(100, card.home))}%"></i></div>
+            <span>${num(card.away)}</span>
+          </div>
+        </div>
+      `).join("");
+    }
+
+    function renderProfiles(profiles) {
+      if (!profiles) return;
+      renderProfile("homeProfile", "homeSample", profiles.home);
+      renderProfile("awayProfile", "awaySample", profiles.away);
+    }
+
+    function renderProfile(target, sampleTarget, profile) {
+      document.querySelector(`#${sampleTarget}`).textContent = `${profile.sample_size} partidos`;
+      const g = profile.generated;
+      const f = profile.form;
+      document.querySelector(`#${target}`).innerHTML = `
+        ${profileMetric("Fuerza", profile.strength.score)}
+        ${profileMetric("Elo", profile.strength.elo)}
+        ${profileMetric("Ataque", g.attack_strength)}
+        ${profileMetric("Defensa", g.defense_strength)}
+        ${profileMetric("Momentum", g.momentum_score)}
+        ${profileMetric("Disponibilidad", g.player_availability_score)}
+        ${profileMetric("Rival ajustado", g.opponent_adjusted_form)}
+        ${profileMetric("Estilo", g.tactical_reliability)}
+        ${profileMetric("Disciplina", g.discipline_score)}
+        ${profileMetric("Balon parado", g.set_piece_threat)}
+        <div class="form-strip"><b>5</b><span>${f.last_5.sequence || "-"}</span><em>${num(f.last_5.trend)}</em></div>
+        <div class="form-strip"><b>10</b><span>${f.last_10.sequence || "-"}</span><em>${num(f.last_10.trend)}</em></div>
+      `;
+    }
+
+    function renderPending(groups) {
+      document.querySelector("#pendingData").innerHTML = Object.entries(groups).map(([group, values]) => `
+        <div class="pending-card">
+          <b>${group}</b>
+          <span>${values.length} variables listas para conectar</span>
+          <p>${values.slice(0, 8).join(", ")}${values.length > 8 ? "..." : ""}</p>
+        </div>
+      `).join("");
+    }
+
+    function renderCalibrationPlan(markets) {
+      const cards = [
+        ["Tarjetas", markets.cards?.direction || "sin datos", "Ajustar baseline por competicion y arbitro."],
+        ["Corners", markets.corners?.direction || "sin datos", "Separar por estilo, localia y dominio territorial."],
+        ["Tiros a puerta", markets.shots_on_target?.direction || "sin datos", "Distinguir volumen de tiros vs eficacia."],
+        ["Empates", "pendiente", "Subir peso en partidos cerrados y fases de bajo riesgo."],
+      ];
+      document.querySelector("#calibrationPlan").innerHTML = cards.map(([name, status, detail]) => `
+        <div class="calibration-card ${status}">
+          <b>${name}</b>
+          <span>${status}</span>
+          <p>${detail}</p>
+        </div>
+      `).join("");
+    }
+
+    function probLine(label, value, kind) {
+      return `<div class="prob-line ${kind}"><span>${label}</span><div><i style="width:${pct(value)}"></i></div><b>${pct(value)}</b></div>`;
+    }
+
+    function barRow(label, value) {
+      return `<div class="bar-row"><span>${label}</span><div><i style="width:${pct(value)}"></i></div><b>${pct(value)}</b></div>`;
+    }
+
+    function oddsTile(label, value) {
+      return `<div class="odds-tile"><span>${label}</span><strong>${pct(value)}</strong></div>`;
+    }
+
+    function marketTile(label, value) {
+      return `<div class="odds-tile"><span>${label}</span><strong>${value}</strong></div>`;
+    }
+
+    function marketErrorCard(label, metric) {
+      if (!metric || !metric.count) return `<div class="empty-state">${label}: sin datos suficientes.</div>`;
+      return `
+        <div class="bias-card ${metric.direction}">
+          <div><b>${label}</b><span>${metric.direction}</span></div>
+          <strong>MAE ${num(metric.mae)}</strong>
+          <em>RMSE ${num(metric.rmse)} - Bias ${num(metric.bias)}</em>
+        </div>
+      `;
+    }
+
+    function fmtMetric(value) {
+      return value === null || value === undefined ? "-" : num(value);
+    }
+
+    function escapeAttr(value) {
+      return String(value || "").replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;");
+    }
+
+    function pickLabel(value) {
+      return {home: "Local", draw: "Empate", away: "Visitante"}[value] || "-";
+    }
+
+    function profileMetric(label, value) {
+      return `<div class="profile-metric"><span>${label}</span><b>${num(value)}</b></div>`;
+    }
+
+    async function refreshAll() {
+      document.querySelector("#trackingDate").value = document.querySelector("#trackingDate").value || new Date().toISOString().slice(0, 10);
+      document.querySelector("#apiSyncDate").value = document.querySelector("#apiSyncDate").value || new Date().toISOString().slice(0, 10);
+      document.querySelector("#dailyDate").value = document.querySelector("#dailyDate").value || new Date().toISOString().slice(0, 10);
+      document.querySelector("#dailySeason").value = document.querySelector("#dailySeason").value || "2026";
+      document.querySelector("#dailyLeague").value = document.querySelector("#dailyLeague").value || "1";
+      document.querySelector("#dailyRangeDays").value = document.querySelector("#dailyRangeDays").value || "3";
+      document.querySelector("#enrichDate").value = document.querySelector("#enrichDate").value || new Date().toISOString().slice(0, 10);
+      document.querySelector("#enrichSeason").value = document.querySelector("#enrichSeason").value || "2026";
+      document.querySelector("#enrichLeague").value = document.querySelector("#enrichLeague").value || "1";
+      loadedViews.clear();
+      await Promise.all([loadSummary(), loadTeams(), loadVenues()]);
+      await loadViewData("dashboard", true);
+    }
+
+    document.querySelector("#homeTeam").addEventListener("change", updateMatchTitle);
+    document.querySelector("#awayTeam").addEventListener("change", updateMatchTitle);
+    refreshAll().catch(error => {
+      document.body.insertAdjacentHTML("beforeend", `<pre class="fatal">${error.message}</pre>`);
+    });
+  </script>
+</body>
+</html>

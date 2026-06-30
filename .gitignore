@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+.venv/
+venv/
+.env
+*.sqlite
+*.db
+data/raw/*
+data/processed/*
+models/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!models/.gitkeep

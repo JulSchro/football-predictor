@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FootballPredictor Simulator</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <span class="eyebrow">World Cup 2026 simulator</span>
+      <h1>FootballPredictor</h1>
+    </div>
+    <a class="repo-link" href="https://github.com/JulSchro/football-predictor">GitHub</a>
+  </header>
+
+  <main class="shell">
+    <section class="controls">
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Simulador</h2>
+          <span id="dataStatus">Datos locales</span>
+        </div>
+
+        <label for="homeTeam">Local</label>
+        <select id="homeTeam"></select>
+
+        <label for="awayTeam">Visitante</label>
+        <select id="awayTeam"></select>
+
+        <label for="venue">Sede</label>
+        <select id="venue"></select>
+
+        <div class="grid-2">
+          <div>
+            <label for="runs">Simulaciones</label>
+            <input id="runs" type="number" min="1000" max="100000" step="1000" value="20000">
+          </div>
+          <div>
+            <label for="mode">Modo</label>
+            <select id="mode">
+              <option value="hybrid">Hibrido</option>
+              <option value="poker">Poker</option>
+              <option value="classic">Clasico</option>
+            </select>
+          </div>
+        </div>
+
+        <button id="simulateBtn">Simular partido</button>
+      </div>
+
+      <div class="panel compact">
+        <h2>Calidad</h2>
+        <div class="quality">
+          <strong>82.2%</strong>
+          <span>Base publica exportada desde el proyecto local</span>
+        </div>
+        <p class="note">La version publica no usa tu API key ni consulta datos privados. La version local puede sincronizar API-Football.</p>
+      </div>
+    </section>
+
+    <section class="stage">
+      <div class="scoreboard">
+        <div>
+          <span id="homeSeed">Local</span>
+          <strong id="homeName">-</strong>
+        </div>
+        <b>vs</b>
+        <div>
+          <span id="awaySeed">Visitante</span>
+          <strong id="awayName">-</strong>
+        </div>
+      </div>
+
+      <div class="prob-card">
+        <div class="prob-line home">
+          <span>Local</span>
+          <div><i id="homeBar"></i></div>
+          <b id="homeProb">0%</b>
+        </div>
+        <div class="prob-line draw">
+          <span>Empate</span>
+          <div><i id="drawBar"></i></div>
+          <b id="drawProb">0%</b>
+        </div>
+        <div class="prob-line away">
+          <span>Visitante</span>
+          <div><i id="awayBar"></i></div>
+          <b id="awayProb">0%</b>
+        </div>
+      </div>
+
+      <div class="cards">
+        <article>
+          <span>Marcador mas probable</span>
+          <strong id="scorePick">-</strong>
+        </article>
+        <article>
+          <span>Over 2.5</span>
+          <strong id="overPick">-</strong>
+        </article>
+        <article>
+          <span>Ambos anotan</span>
+          <strong id="bttsPick">-</strong>
+        </article>
+        <article>
+          <span>Ventaja de sede</span>
+          <strong id="venueEdge">-</strong>
+        </article>
+      </div>
+
+      <div class="split">
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Factores</h2>
+            <span id="winnerHint">-</span>
+          </div>
+          <div id="factors" class="factor-list"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Mercados</h2>
+            <span>estimacion</span>
+          </div>
+          <div id="markets" class="market-grid"></div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

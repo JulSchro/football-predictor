@@ -349,6 +349,103 @@ h3 {
   grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
 }
 
+.dashboard-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 0.28fr);
+  gap: 16px;
+  align-items: stretch;
+  padding: 22px;
+  color: #ffffff;
+  background: var(--navy);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.dashboard-hero span,
+.dashboard-hero p,
+.dashboard-hero em {
+  color: rgba(255, 255, 255, 0.72);
+  font-style: normal;
+  font-weight: 800;
+}
+
+.dashboard-hero span {
+  display: block;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.dashboard-hero h2 {
+  margin: 8px 0;
+  font-size: 34px;
+  line-height: 1.05;
+}
+
+.dashboard-hero p {
+  max-width: 720px;
+  margin: 0;
+  font-size: 14px;
+}
+
+.dashboard-hero-score {
+  display: grid;
+  align-content: center;
+  gap: 6px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius);
+}
+
+.dashboard-hero-score strong {
+  display: block;
+  font-size: 38px;
+  line-height: 1;
+}
+
+.dashboard-command-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.18fr) minmax(320px, 0.82fr);
+  gap: 14px;
+}
+
+.dashboard-insight-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.dashboard-primary-panel {
+  border-left: 5px solid var(--green);
+}
+
+.dashboard-pick-list {
+  display: grid;
+  gap: 8px;
+}
+
+.dashboard-pick-list .betting-row {
+  grid-template-columns: minmax(0, 1.4fr) minmax(120px, 0.8fr) minmax(90px, 0.5fr) minmax(80px, 0.45fr);
+  padding: 10px;
+}
+
+.dashboard-quality-grid {
+  grid-template-columns: 1fr;
+  margin-top: 10px;
+}
+
+.executive-summary .stat:first-child {
+  color: #ffffff;
+  background: var(--teal);
+  border-color: var(--teal);
+}
+
+.executive-summary .stat:first-child span,
+.executive-summary .stat:first-child strong {
+  color: #ffffff;
+}
+
 .analysis-grid,
 .automation-grid,
 .prediction-layout {
@@ -1313,6 +1410,9 @@ th {
 
   .prediction-command,
   .dashboard-grid,
+  .dashboard-hero,
+  .dashboard-command-grid,
+  .dashboard-insight-grid,
   .analysis-grid,
   .automation-grid,
   .analysis-grid.wide-left,
@@ -1324,6 +1424,10 @@ th {
   .api-sync-controls,
   .compact-api-controls,
   .betting-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dashboard-insight-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -1377,8 +1481,20 @@ th {
   .context-strip,
   .sim-top,
   .betting-head,
-  .betting-row {
+  .betting-row,
+  .dashboard-hero,
+  .dashboard-command-grid,
+  .dashboard-insight-grid,
+  .dashboard-pick-list .betting-row {
     grid-template-columns: 1fr;
+  }
+
+  .dashboard-hero h2 {
+    font-size: 26px;
+  }
+
+  .dashboard-hero-score strong {
+    font-size: 31px;
   }
 
   .match-title {

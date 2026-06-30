@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>FootballPredictor</title>
-  <link rel="stylesheet" href="/styles.css?v=3">
+  <link rel="stylesheet" href="/styles.css?v=4">
 </head>
 <body>
   <aside class="sidebar">
@@ -43,27 +43,48 @@
     </header>
 
     <section class="view active" id="view-dashboard">
-      <div class="summary-grid" id="summary"></div>
-      <div class="dashboard-grid">
-        <section class="panel">
-          <div class="section-title"><span>System health</span><small>estado general</small></div>
-          <div id="systemHealth"></div>
+      <section class="dashboard-hero">
+        <div>
+          <span>Operacion predictiva</span>
+          <h2 id="dashboardMainSignal">Preparando centro de mando</h2>
+          <p id="dashboardMainCopy">Sincroniza fixtures, genera predicciones y revisa pendientes desde una sola vista.</p>
+        </div>
+        <div class="dashboard-hero-score">
+          <span>Calidad de datos</span>
+          <strong id="dashboardDataScore">--</strong>
+          <em id="dashboardReadiness">Cobertura pendiente</em>
+        </div>
+      </section>
+
+      <div class="summary-grid executive-summary" id="summary"></div>
+
+      <div class="dashboard-command-grid">
+        <section class="panel dashboard-primary-panel">
+          <div class="section-title"><span>Picks próximos</span><small>ventana operativa</small></div>
+          <div id="dashboardBettingBoard" class="empty-state">Sin picks cargados para la ventana.</div>
         </section>
         <section class="panel">
-          <div class="section-title"><span>Performance</span><small>prediccion real</small></div>
+          <div class="section-title"><span>Partidos próximos</span><small>API-Football local</small></div>
+          <div id="todayOps"></div>
+        </section>
+      </div>
+
+      <div class="dashboard-insight-grid">
+        <section class="panel">
+          <div class="section-title"><span>Rendimiento</span><small>backtest real</small></div>
           <div id="dashboardPerformance"></div>
+        </section>
+        <section class="panel">
+          <div class="section-title"><span>Pendientes críticos</span><small>resultados por cerrar</small></div>
+          <div id="dashboardPending"></div>
         </section>
         <section class="panel">
           <div class="section-title"><span>Sesgos principales</span><small>mercados</small></div>
           <div id="dashboardBiases"></div>
         </section>
         <section class="panel">
-          <div class="section-title"><span>Pendientes</span><small>resultados por capturar</small></div>
-          <div id="dashboardPending"></div>
-        </section>
-        <section class="panel">
-          <div class="section-title"><span>Partidos de hoy</span><small>operacion API</small></div>
-          <div id="todayOps"></div>
+          <div class="section-title"><span>Calidad accionable</span><small>fuentes y cobertura</small></div>
+          <div id="systemHealth"></div>
         </section>
       </div>
     </section>
@@ -426,7 +447,7 @@
     async function loadViewData(name, force = false) {
       if (!force && loadedViews.has(name)) return;
       const loaders = {
-        dashboard: [loadSummary, loadPredictionBacktest, loadDataQuality, loadTodayOperations],
+        dashboard: [loadSummary, loadPredictionBacktest, loadDataQuality, loadTodayOperations, loadBettingBoard],
         prediction: [loadTeams, loadVenues],
         tracking: [loadTodayOperations, loadBettingBoard, loadPendingSnapshots, loadPredictionHistory, loadPredictionBacktest],
         backtesting: [loadBacktest, loadPredictionBacktest],
@@ -487,6 +508,8 @@
       document.querySelector("#summary").innerHTML = items.map(([label, value]) => `
         <div class="stat"><span>${label}</span><strong>${value}</strong></div>
       `).join("");
+      document.querySelector("#dashboardMainSignal").textContent = `${data.matches || 0} partidos listos para modelar`;
+      document.querySelector("#dashboardMainCopy").textContent = `${data.teams || 0} equipos, ${data.predictions || 0} predicciones guardadas y datos hasta ${data.latest_match_date || "sin fecha"}.`;
     }
 
     async function loadTeams() {
@@ -594,7 +617,17 @@
         </div>
       `;
       document.querySelector("#predictionBacktest").innerHTML = panel;
-      document.querySelector("#dashboardPerformance").innerHTML = panel;
+      document.querySelector("#dashboardPerformance").innerHTML = `
+        <div class="backtest-meter">
+          <div><span>Partidos</span><strong>${m.matches}</strong></div>
+          <div><span>Accuracy</span><strong>${pct(m.strict_accuracy)}</strong></div>
+          <div><span>Top 2</span><strong>${pct(m.exact_score_top2_accuracy)}</strong></div>
+        </div>
+        <div class="mini-table">
+          <div><span>Log loss</span><b>${fmtMetric(m.log_loss)}</b></div>
+          <div><span>Brier</span><b>${fmtMetric(m.brier)}</b></div>
+        </div>
+      `;
       const biasPanel = `
         ${marketErrorCard("Corners", markets.corners)}
         ${marketErrorCard("Tiros a puerta", markets.shots_on_target)}
@@ -814,7 +847,22 @@
         </div>
       ` : `<div class="empty-state">Sin predicciones pendientes de resultado.</div>`;
       document.querySelector("#pendingSnapshots").innerHTML = content;
-      document.querySelector("#dashboardPending").innerHTML = content;
+      document.querySelector("#dashboardPending").innerHTML = pending.length ? `
+        <div class="history-summary">
+          <div><span>Pendientes</span><b>${pending.length}</b></div>
+          <div><span>Mas antiguo</span><b>${pending[0]?.match_date || "-"}</b></div>
+          <div><span>Accion</span><b>Cerrar</b></div>
+        </div>
+        <div class="fixture-list">
+          ${pending.slice(0, 4).map(row => `
+            <div class="fixture-row">
+              <b>${row.home_team} vs ${row.away_team}</b>
+              <span>${row.match_date} - ${pickLabel(row.predicted_pick)}</span>
+              <em>${row.model_version || "-"}</em>
+            </div>
+          `).join("")}
+        </div>
+      ` : `<div class="empty-state">Sin predicciones pendientes de resultado.</div>`;
     }
 
     async function deleteSnapshot(id) {
@@ -1059,6 +1107,14 @@
       const budget = data.api_budget || {};
       const usage = budget.free_daily_limit ? Math.min(1, budget.estimated_minimum / budget.free_daily_limit) : 0;
       const fixtures = data.fixtures || [];
+      const pending = counts.pending_snapshots || 0;
+      const configuredFixtures = counts.configured_fixtures_today || 0;
+      document.querySelector("#dashboardMainSignal").textContent = configuredFixtures
+        ? `${configuredFixtures} partidos objetivo en la ventana`
+        : "Sin partidos objetivo cargados en la ventana";
+      document.querySelector("#dashboardMainCopy").textContent = pending
+        ? `${pending} predicciones esperan resultado. Prioridad: cerrar pendientes antes de recalibrar.`
+        : "No hay pendientes críticos en la ventana actual.";
       const panel = `
         <div class="budget-grid">
           <div><span>Ventana</span><b>${(data.dates || [data.date]).join(" → ")}</b></div>
@@ -1136,7 +1192,23 @@
         </div>
       `;
       document.querySelector("#dataQuality").innerHTML = content;
-      document.querySelector("#systemHealth").innerHTML = content;
+      document.querySelector("#dashboardDataScore").textContent = pct(data.score);
+      document.querySelector("#dashboardReadiness").textContent = `${readiness.ready_count || 0}/${readiness.total || 0} fuentes listas`;
+      document.querySelector("#systemHealth").innerHTML = `
+        <div class="readiness-strip">
+          <div><span>API readiness</span><b>${pct(readiness.ready_ratio || 0)}</b></div>
+          <div><span>Fuentes listas</span><b>${readiness.ready_count || 0}/${readiness.total || 0}</b></div>
+          <div><span>Competiciones</span><b>${competitions.length}</b></div>
+        </div>
+        <div class="quality-grid dashboard-quality-grid">
+          ${groups.slice(0, 6).map(group => `
+            <div class="quality-pill ${group.status}">
+              <b>${group.label}</b>
+              <span>${group.status} - ${group.count}</span>
+            </div>
+          `).join("")}
+        </div>
+      `;
     }
 
     async function loadExperiments() {
@@ -1180,6 +1252,15 @@
       const rangeDays = Number(document.querySelector("#dailyRangeDays")?.value || 3);
       const data = await getJson(`/api/operations/betting-board?target_date=${target}&range_days=${rangeDays}`);
       const rows = data.rows || [];
+      const dashboardBettingBoard = document.querySelector("#dashboardBettingBoard");
+      if (dashboardBettingBoard) {
+        dashboardBettingBoard.classList.toggle("empty-state", !rows.length);
+        dashboardBettingBoard.innerHTML = rows.length ? `
+          <div class="dashboard-pick-list">
+            ${rows.slice(0, 5).map(row => bettingRow(row)).join("")}
+          </div>
+        ` : "Sin picks cargados para esta ventana.";
+      }
       document.querySelector("#bettingBoard").classList.toggle("empty-state", !rows.length);
       document.querySelector("#bettingBoard").innerHTML = rows.length ? `
         <div class="betting-head">

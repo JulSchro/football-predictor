@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>FootballPredictor</title>
-  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/styles.css?v=3">
 </head>
 <body>
   <aside class="sidebar">
@@ -105,22 +105,33 @@
         </section>
       </div>
 
-      <section class="hero-panel match-stage">
-        <div class="match-title">
-          <span id="homeName">Local</span>
-          <b>vs</b>
-          <span id="awayName">Visitante</span>
-        </div>
-        <div id="simulationPanel" class="simulation-shell">
-          <div class="empty-state">Corre una simulacion para ver distribucion, escenarios y marcadores.</div>
-        </div>
+      <div class="product-tabs" data-tab-group="prediction">
+        <button class="active" type="button" data-tab-target="prediction-summary">Resumen</button>
+        <button type="button" data-tab-target="prediction-factors">Factores</button>
+        <button type="button" data-tab-target="prediction-profiles">Perfiles</button>
+      </div>
+
+      <section class="tab-pane active" id="prediction-summary">
+        <section class="hero-panel match-stage">
+          <div class="match-title">
+            <span id="homeName">Local</span>
+            <b>vs</b>
+            <span id="awayName">Visitante</span>
+          </div>
+          <div id="simulationPanel" class="simulation-shell">
+            <div class="empty-state">Corre una simulacion para ver distribucion, escenarios y marcadores.</div>
+          </div>
+        </section>
       </section>
 
-      <div class="analysis-grid insight-grid">
+      <section class="tab-pane" id="prediction-factors">
         <section class="panel">
           <div class="section-title"><span>Factores clave</span><small>ventaja relativa</small></div>
           <div id="factorCards" class="factor-grid"></div>
         </section>
+      </section>
+
+      <section class="tab-pane" id="prediction-profiles">
         <section class="panel">
           <div class="section-title"><span>Perfiles de equipo</span><small>equipo vs equipo</small></div>
           <div class="profile-compare">
@@ -128,11 +139,18 @@
             <div><h3>Visitante <small id="awaySample"></small></h3><div id="awayProfile" class="profile-grid"></div></div>
           </div>
         </section>
-      </div>
+      </section>
     </section>
 
     <section class="view" id="view-tracking">
-      <div class="analysis-grid">
+      <div class="product-tabs" data-tab-group="tracking">
+        <button class="active" type="button" data-tab-target="tracking-overview">Operativa</button>
+        <button type="button" data-tab-target="tracking-pending">Pendientes</button>
+        <button type="button" data-tab-target="tracking-history">Historial</button>
+        <button type="button" data-tab-target="tracking-snapshot">Snapshot manual</button>
+      </div>
+
+      <section class="tab-pane" id="tracking-snapshot">
         <section class="panel">
           <div class="section-title"><span>Guardar snapshot</span><small>antes del partido</small></div>
           <div class="two-cols">
@@ -147,7 +165,10 @@
             <div><b>4</b><span>Evaluar y calibrar</span><em>activo</em></div>
           </div>
         </section>
+      </section>
 
+      <section class="tab-pane active" id="tracking-overview">
+        <div class="analysis-grid">
         <section class="panel">
           <div class="section-title"><span>Prediccion automatica</span><small>fixtures del dia</small></div>
           <div class="three-cols">
@@ -167,12 +188,18 @@
             <button class="secondary" onclick="runPendingReconciliation()">Rescatar pendientes</button>
             <button onclick="runDailyPipeline()">Ciclo completo</button>
           </div>
-          <div id="dailyOpsStatus" class="sync-note">Listo para crear snapshots automaticos con contexto.</div>
+          <div id="dailyOpsStatus" class="sync-note" role="status" aria-live="polite">Listo para crear snapshots automaticos con contexto.</div>
           <div id="bettingBoard" class="betting-board empty-state">Los picks apareceran aqui cuando guardes snapshots para la ventana seleccionada.</div>
         </section>
-      </div>
+        <section class="panel">
+          <div class="section-title"><span>Estado diario</span><small>fixtures y snapshots</small></div>
+          <div id="trackingTodayOps"></div>
+        </section>
+        </div>
+      </section>
 
-      <div class="analysis-grid">
+      <section class="tab-pane" id="tracking-pending">
+      <div class="analysis-grid compact-flow">
         <section class="panel">
           <div class="section-title"><span>Registrar resultado</span><small>partidos pendientes</small></div>
           <label for="pendingSelect">Snapshot</label>
@@ -189,14 +216,13 @@
           <button class="secondary" onclick="saveResult()">Guardar resultado real</button>
         </section>
         <section class="panel">
-          <div class="section-title"><span>Estado diario</span><small>fixtures y snapshots</small></div>
-          <div id="trackingTodayOps"></div>
+          <div class="section-title"><span>Predicciones pendientes</span><small>sin resultado</small></div>
+          <div id="pendingSnapshots" class="empty-state">Sin pendientes cargados.</div>
         </section>
       </div>
-      <section class="panel">
-        <div class="section-title"><span>Predicciones pendientes</span><small>sin resultado</small></div>
-        <div id="pendingSnapshots" class="empty-state">Sin pendientes cargados.</div>
       </section>
+
+      <section class="tab-pane" id="tracking-history">
       <section class="panel">
         <div class="section-title"><span>Historial de predicciones</span><small>pendientes y evaluadas</small></div>
         <div id="predictionHistory" class="empty-state">Sin historial cargado.</div>
@@ -204,6 +230,7 @@
       <section class="panel">
         <div class="section-title"><span>Detalle de prediccion</span><small>snapshot seleccionado</small></div>
         <div id="predictionDetail" class="empty-state">Selecciona una prediccion del historial.</div>
+      </section>
       </section>
     </section>
 
@@ -323,7 +350,7 @@
             <div><label for="apiSyncSeason">Temporada opcional</label><input id="apiSyncSeason" type="number" min="1900" placeholder="2026"></div>
             <button onclick="syncTodayFromApi()">Sincronizar API-Football</button>
           </div>
-          <div id="apiSyncStatus" class="sync-note">Usa 1 request si consultas por fecha sin liga.</div>
+          <div id="apiSyncStatus" class="sync-note" role="status" aria-live="polite">Usa 1 request si consultas por fecha sin liga.</div>
           <div id="apiBudget"></div>
         </section>
         <section class="panel">
@@ -342,7 +369,7 @@
             <button class="secondary" onclick="syncApiTeamStats()">Solo team stats</button>
             <button class="secondary" onclick="syncSelectedFixtureDetails()">Detalle fixture</button>
           </div>
-          <div id="apiEnrichmentStatus" class="sync-note">Usa limites bajos para pruebas; subelos cuando quieras alimentar una liga completa.</div>
+          <div id="apiEnrichmentStatus" class="sync-note" role="status" aria-live="polite">Usa limites bajos para pruebas; subelos cuando quieras alimentar una liga completa.</div>
           <div id="apiEnrichmentSummary"></div>
         </section>
       </div>
@@ -370,6 +397,21 @@
     document.querySelectorAll(".main-nav button").forEach(button => {
       button.addEventListener("click", () => showView(button.dataset.view));
     });
+
+    document.querySelectorAll(".product-tabs").forEach(group => {
+      group.addEventListener("click", event => {
+        const button = event.target.closest("button[data-tab-target]");
+        if (!button) return;
+        showTab(group.dataset.tabGroup, button.dataset.tabTarget);
+      });
+    });
+
+    function showTab(groupName, targetId) {
+      const group = document.querySelector(`.product-tabs[data-tab-group="${groupName}"]`);
+      if (!group) return;
+      group.querySelectorAll("button").forEach(button => button.classList.toggle("active", button.dataset.tabTarget === targetId));
+      group.parentElement.querySelectorAll(":scope > .tab-pane").forEach(pane => pane.classList.toggle("active", pane.id === targetId));
+    }
 
     function showView(name) {
       document.querySelectorAll(".main-nav button").forEach(button => button.classList.toggle("active", button.dataset.view === name));
@@ -403,6 +445,25 @@
       if (!response.ok) throw new Error(await response.text());
       return response.json();
     }
+
+    function setLoading(selector, text = "Cargando...") {
+      const node = document.querySelector(selector);
+      if (node) node.innerHTML = `<div class="loading-state" role="status" aria-live="polite"><span></span>${text}</div>`;
+    }
+
+    function enhanceTables(root = document) {
+      root.querySelectorAll(".table-wrap table").forEach(table => {
+        const headers = [...table.querySelectorAll("thead th")].map(th => th.textContent.trim());
+        table.querySelectorAll("tbody tr").forEach(row => {
+          [...row.children].forEach((cell, index) => {
+            if (headers[index]) cell.dataset.label = headers[index];
+          });
+        });
+      });
+    }
+
+    const tableObserver = new MutationObserver(() => enhanceTables());
+    tableObserver.observe(document.body, {childList: true, subtree: true});
 
     function currentPayload() {
       return {
@@ -545,7 +606,7 @@
     }
 
     async function loadPredictionHistory() {
-      const data = await getJson("/api/prediction-history?limit=200");
+      const data = await getJson("/api/prediction-history?limit=50");
       const rows = data.rows || [];
       const counts = data.counts || {};
       const table = rows.length ? `
@@ -1238,6 +1299,8 @@
 
     async function runPrediction() {
       updateMatchTitle();
+      setLoading("#predictionPanel", "Calculando favorito, mercados y jugadores...");
+      document.querySelector("#quickStatus").textContent = "Calculando";
       const payload = {
         home_team: document.querySelector("#homeTeam").value,
         away_team: document.querySelector("#awayTeam").value,
@@ -1341,6 +1404,7 @@
 
     async function runSimulation() {
       updateMatchTitle();
+      setLoading("#simulationPanel", "Ejecutando simulacion Monte Carlo...");
       const data = await getJson("/api/simulate/advanced", {
         method: "POST",
         headers: {"Content-Type": "application/json"},

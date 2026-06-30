@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>FootballPredictor</title>
-  <link rel="stylesheet" href="/styles.css?v=4">
+  <link rel="stylesheet" href="/styles.css?v=5">
 </head>
 <body>
   <aside class="sidebar">
@@ -293,6 +293,21 @@
     </section>
 
     <section class="view" id="view-database">
+      <section class="database-hero">
+        <div>
+          <span>Inventario local</span>
+          <h2 id="databaseMainSignal">Analizando cobertura guardada</h2>
+          <p id="databaseMainCopy">Revisa qué competiciones y temporadas ya están disponibles antes de gastar requests.</p>
+        </div>
+        <div class="database-score">
+          <span>Fuente dominante</span>
+          <strong id="databaseSourceSignal">--</strong>
+          <em id="databaseCoverageSignal">Sin medición</em>
+        </div>
+      </section>
+
+      <div class="database-inventory-grid" id="databaseInventory"></div>
+
       <section class="panel">
         <div class="section-title"><span>Explorador de datos</span><small>fixtures, partidos y fuentes</small></div>
         <div id="dataExplorerTotals" class="summary-grid compact-summary"></div>
@@ -312,7 +327,7 @@
         <div id="fixtureExplorer"></div>
       </section>
       <section class="panel">
-        <div class="section-title"><span>Resumen por competicion</span><small>cobertura guardada</small></div>
+        <div class="section-title"><span>Inventario por competicion</span><small>cobertura guardada</small></div>
         <div id="competitionExplorer"></div>
       </section>
     </section>
@@ -1306,13 +1321,38 @@
         competitions.map(row => `<option value="${escapeAttr(row.competition)}">${row.competition} (${row.rows})</option>`)
       ).join("");
       if (current) document.querySelector("#explorerCompetition").value = current;
+      const apiRows = competitions.filter(row => String(row.sources || "").includes("api-football"));
+      const completeRows = competitions.filter(row => Number(row.rows || 0) >= 300 && Number(row.finished || 0) > 0);
+      const activeRows = competitions.filter(row => Number(row.upcoming || 0) > 0);
+      const totalRows = competitions.reduce((sum, row) => sum + Number(row.rows || 0), 0);
+      const dominantSource = apiRows.length >= competitions.length / 2 ? "API-Football" : "Mixta";
+      document.querySelector("#databaseMainSignal").textContent = `${competitions.length} competiciones/temporadas inventariadas`;
+      document.querySelector("#databaseMainCopy").textContent = `${totalRows.toLocaleString()} registros locales. ${activeRows.length} temporadas tienen próximos partidos.`;
+      document.querySelector("#databaseSourceSignal").textContent = dominantSource;
+      document.querySelector("#databaseCoverageSignal").textContent = `${completeRows.length} coberturas fuertes`;
+      document.querySelector("#databaseInventory").innerHTML = [
+        ["Competiciones", competitions.length],
+        ["Con API-Football", apiRows.length],
+        ["Cobertura fuerte", completeRows.length],
+        ["Con próximos", activeRows.length],
+      ].map(([label, value]) => `
+        <div class="inventory-card">
+          <span>${label}</span>
+          <strong>${value}</strong>
+        </div>
+      `).join("");
       document.querySelector("#competitionExplorer").innerHTML = competitions.length ? `
+        <div class="inventory-board">
+          ${competitions.slice(0, 12).map(row => inventoryRow(row)).join("")}
+        </div>
+        <div class="sync-note">Mostrando las 12 coberturas principales y las primeras 40 filas del inventario. Usa filtros para profundizar sin cargar toda la base.</div>
         <div class="table-wrap compact-table">
           <table>
-            <thead><tr><th>Competicion</th><th>Temporada</th><th>Registros</th><th>Finalizados</th><th>Proximos</th><th>Rango</th><th>Fuente</th></tr></thead>
+            <thead><tr><th>Estado</th><th>Competicion</th><th>Temporada</th><th>Registros</th><th>Finalizados</th><th>Proximos</th><th>Rango</th><th>Fuente</th></tr></thead>
             <tbody>
-              ${competitions.slice(0, 80).map(row => `
+              ${competitions.slice(0, 40).map(row => `
                 <tr>
+                  <td>${inventoryStatusTag(row)}</td>
                   <td><b>${row.competition}</b></td>
                   <td>${row.season}</td>
                   <td>${row.rows}</td>
@@ -1328,6 +1368,38 @@
       ` : `<div class="empty-state">Todavia no hay competiciones guardadas.</div>`;
     }
 
+    function inventoryStatus(row) {
+      const rows = Number(row.rows || 0);
+      const finished = Number(row.finished || 0);
+      const upcoming = Number(row.upcoming || 0);
+      const hasApi = String(row.sources || "").includes("api-football");
+      if (rows >= 300 && finished > 0 && hasApi) return {key: "ready", label: "Descargada", action: "No gastar requests"};
+      if (rows > 0 && hasApi) return {key: "mixed", label: "Parcial", action: upcoming ? "Actualizar detalles" : "Completar temporada"};
+      if (rows > 0) return {key: "historical", label: "Historica", action: "Priorizar API-Football"};
+      return {key: "pending", label: "Pendiente", action: "Descargar"};
+    }
+
+    function inventoryStatusTag(row) {
+      const status = inventoryStatus(row);
+      return `<span class="status-tag ${status.key}">${status.label}</span>`;
+    }
+
+    function inventoryRow(row) {
+      const status = inventoryStatus(row);
+      return `
+        <div class="inventory-row ${status.key}">
+          <div>
+            <b>${row.competition}</b>
+            <span>${row.season} - ${row.sources || "sin fuente"}</span>
+          </div>
+          <div><span>Registros</span><strong>${row.rows}</strong></div>
+          <div><span>Finalizados</span><strong>${row.finished || 0}</strong></div>
+          <div><span>Proximos</span><strong>${row.upcoming || 0}</strong></div>
+          <em>${status.action}</em>
+        </div>
+      `;
+    }
+
     async function loadDataExplorer() {
       const params = new URLSearchParams();
       const fields = [
@@ -1341,7 +1413,7 @@
         const value = document.querySelector(selector).value;
         if (value) params.set(key, value);
       });
-      params.set("limit", "150");
+      params.set("limit", "50");
       const data = await getJson(`/api/data-explorer/fixtures?${params.toString()}`);
       const totals = data.totals || {};
       const fixtures = data.fixtures || [];

@@ -435,6 +435,128 @@ h3 {
   margin-top: 10px;
 }
 
+.database-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 0.28fr);
+  gap: 16px;
+  padding: 22px;
+  color: #ffffff;
+  background: var(--navy);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.database-hero span,
+.database-hero p,
+.database-hero em {
+  color: rgba(255, 255, 255, 0.72);
+  font-style: normal;
+  font-weight: 800;
+}
+
+.database-hero span {
+  display: block;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.database-hero h2 {
+  margin: 8px 0;
+  font-size: 31px;
+  line-height: 1.06;
+}
+
+.database-hero p {
+  margin: 0;
+}
+
+.database-score,
+.inventory-card {
+  display: grid;
+  align-content: center;
+  gap: 6px;
+  padding: 15px;
+  border-radius: var(--radius);
+}
+
+.database-score {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.database-score strong {
+  font-size: 30px;
+  line-height: 1;
+}
+
+.database-inventory-grid,
+.inventory-board {
+  display: grid;
+  gap: 10px;
+}
+
+.database-inventory-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.inventory-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+}
+
+.inventory-card span,
+.inventory-row span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.inventory-card strong {
+  font-size: 26px;
+}
+
+.inventory-board {
+  margin-bottom: 14px;
+}
+
+.inventory-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) repeat(3, minmax(84px, 0.42fr)) minmax(140px, 0.6fr);
+  gap: 10px;
+  align-items: center;
+  padding: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-left: 5px solid var(--blue);
+  border-radius: var(--radius);
+}
+
+.inventory-row.ready {
+  border-left-color: var(--green);
+}
+
+.inventory-row.mixed {
+  border-left-color: var(--amber);
+}
+
+.inventory-row.historical {
+  border-left-color: var(--teal);
+}
+
+.inventory-row b,
+.inventory-row strong {
+  display: block;
+}
+
+.inventory-row em {
+  color: var(--ink-2);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 900;
+  text-align: right;
+}
+
 .executive-summary .stat:first-child {
   color: #ffffff;
   background: var(--teal);
@@ -1413,6 +1535,9 @@ th {
   .dashboard-hero,
   .dashboard-command-grid,
   .dashboard-insight-grid,
+  .database-hero,
+  .database-inventory-grid,
+  .inventory-row,
   .analysis-grid,
   .automation-grid,
   .analysis-grid.wide-left,
@@ -1429,6 +1554,19 @@ th {
 
   .dashboard-insight-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .database-inventory-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .inventory-row {
+    grid-template-columns: minmax(0, 1fr) repeat(3, minmax(82px, 0.4fr));
+  }
+
+  .inventory-row em {
+    grid-column: 1 / -1;
+    text-align: left;
   }
 }
 
@@ -1485,6 +1623,9 @@ th {
   .dashboard-hero,
   .dashboard-command-grid,
   .dashboard-insight-grid,
+  .database-hero,
+  .database-inventory-grid,
+  .inventory-row,
   .dashboard-pick-list .betting-row {
     grid-template-columns: 1fr;
   }
@@ -1495,6 +1636,14 @@ th {
 
   .dashboard-hero-score strong {
     font-size: 31px;
+  }
+
+  .database-hero h2 {
+    font-size: 25px;
+  }
+
+  .inventory-row em {
+    text-align: left;
   }
 
   .match-title {
@@ -1528,6 +1677,12 @@ th {
 
   .table-wrap {
     overflow-x: visible;
+  }
+
+  #competitionExplorer .table-wrap,
+  .explorer-table {
+    max-height: 720px;
+    overflow-y: auto;
   }
 
   .table-wrap table,

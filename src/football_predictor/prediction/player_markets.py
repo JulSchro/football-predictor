@@ -92,7 +92,7 @@ def player_rows(conn: sqlite3.Connection, team: str) -> list[sqlite3.Row]:
                COUNT(*) AS stat_rows
         FROM player_season_stats pss
         JOIN players p ON p.id = pss.player_id
-        WHERE lower(pss.team_name) = lower(?)
+        WHERE pss.team_name = ? COLLATE NOCASE
         GROUP BY p.id, p.name, p.preferred_position
         HAVING SUM(COALESCE(pss.minutes, 0)) > 0
         ORDER BY minutes DESC, rating DESC
@@ -106,7 +106,7 @@ def unavailable_player_ids(conn: sqlite3.Connection, team: str) -> set[int]:
         """
         SELECT DISTINCT player_id
         FROM player_availability
-        WHERE lower(team) = lower(?)
+        WHERE team = ? COLLATE NOCASE
           AND player_id IS NOT NULL
           AND lower(COALESCE(status, '')) NOT IN ('available', 'fit')
         """,

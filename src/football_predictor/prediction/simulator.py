@@ -60,18 +60,27 @@ def simulate_advanced_match(
     seed: int = 42,
     venue: dict | None = None,
     match_context: dict | None = None,
+    predictor: MatchPredictor | None = None,
+    home_profile: dict | None = None,
+    away_profile: dict | None = None,
 ) -> dict:
     rng = random.Random(seed)
-    predictor = MatchPredictor(matches, team_metrics=team_metrics)
+    predictor = predictor or MatchPredictor(matches, team_metrics=team_metrics)
     base_prediction = predictor.predict(home_team, away_team)
-    home_profile = build_team_profile(matches, home_team, team_metrics.get(home_team, {}))
-    away_profile = build_team_profile(matches, away_team, team_metrics.get(away_team, {}))
+    home_profile = home_profile or build_team_profile(matches, home_team, team_metrics.get(home_team, {}))
+    away_profile = away_profile or build_team_profile(matches, away_team, team_metrics.get(away_team, {}))
     factor_edge = profile_edge(home_profile, away_profile)
     ground_edge = venue_edge(home_team, away_team, venue, team_metrics)
     edge = max(min(factor_edge + ground_edge, 0.22), -0.22)
     matrix = predictor.poisson.predict_score_matrix(home_team, away_team)
     scores = list(matrix.keys())
     weights = list(matrix.values())
+    score_choices = {
+        "home_win": filter_scores_by_outcome(scores, "home_win"),
+        "draw": filter_scores_by_outcome(scores, "draw"),
+        "away_win": filter_scores_by_outcome(scores, "away_win"),
+    }
+    score_weights = {outcome: [matrix[score] for score in outcome_scores] for outcome, outcome_scores in score_choices.items()}
     outcome_probabilities = adjusted_outcome_probabilities(base_prediction.model_dump(), edge)
     outcome_probabilities = apply_context_to_outcomes(outcome_probabilities, match_context)
 
@@ -85,9 +94,7 @@ def simulate_advanced_match(
             weights=[outcome_probabilities["home_win"], outcome_probabilities["draw"], outcome_probabilities["away_win"]],
             k=1,
         )[0]
-        outcome_scores = filter_scores_by_outcome(scores, outcome)
-        outcome_weights = [matrix[score] for score in outcome_scores]
-        home_goals, away_goals = rng.choices(outcome_scores, weights=outcome_weights, k=1)[0]
+        home_goals, away_goals = rng.choices(score_choices[outcome], weights=score_weights[outcome], k=1)[0]
         draw_edge = edge + poker_factor_noise(rng, mode)
         scenario_counts[dominant_scenario(rng, draw_edge)] += 1
 
@@ -159,8 +166,17 @@ def simulate_fixture_list(
     fixtures: list[dict],
     simulations: int = 5000,
     mode: str = "hybrid",
+    predictor: MatchPredictor | None = None,
+    profile_cache: dict[str, dict] | None = None,
 ) -> list[dict]:
     results = []
+    predictor = predictor or MatchPredictor(matches, team_metrics=team_metrics)
+    profile_cache = profile_cache or {}
+    def get_profile(team: str) -> dict:
+        if team not in profile_cache:
+            profile_cache[team] = build_team_profile(matches, team, team_metrics.get(team, {}))
+        return profile_cache[team]
+
     for fixture in fixtures:
         result = simulate_advanced_match(
             matches,
@@ -171,6 +187,9 @@ def simulate_fixture_list(
             mode=mode,
             venue=fixture.get("venue"),
             match_context=fixture.get("match_context"),
+            predictor=predictor,
+            home_profile=get_profile(fixture["home_team"]),
+            away_profile=get_profile(fixture["away_team"]),
         )
         sim = result["simulation"]
         winner = "home_team" if sim["home_win"] >= sim["away_win"] else "away_team"

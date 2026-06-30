@@ -241,6 +241,32 @@ def create_app(db_path: Path | str | None = None) -> FastAPI:
 
         return cached("advanced_stats_df", 60, factory)
 
+    def load_predictor() -> MatchPredictor:
+        return cached("match_predictor", 60, lambda: MatchPredictor(load_matches(), team_metrics=load_team_metrics()))
+
+    def load_factor_profile(team: str) -> dict:
+        def factory() -> dict:
+            metrics = load_team_metrics()
+            return build_team_profile(load_matches(), team, metrics.get(team, {}))
+
+        return cached(f"factor_profile:{team.lower()}", 60, factory)
+
+    def load_player_markets(home_team: str, away_team: str, markets: dict) -> dict:
+        key_parts = [
+            home_team.lower(),
+            away_team.lower(),
+            str(markets.get("home_shots_on_target_expected")),
+            str(markets.get("away_shots_on_target_expected")),
+            str(markets.get("home_xg_recent")),
+            str(markets.get("away_xg_recent")),
+        ]
+
+        def factory() -> dict:
+            with connect(resolved_db_path) as conn:
+                return estimate_player_markets(conn, home_team, away_team, markets)
+
+        return cached(f"player_markets:{'|'.join(key_parts)}", 60, factory)
+
     def load_prediction_backtest_metrics(limit: int = 500) -> dict:
         def factory() -> dict:
             with connect(resolved_db_path) as conn:
@@ -367,12 +393,19 @@ def create_app(db_path: Path | str | None = None) -> FastAPI:
                     )
                 )
             existing_metrics = compute_backtest_metrics(list_prediction_backtests(conn))
+            predictor = MatchPredictor(matches, team_metrics=team_metrics)
+            profile_cache: dict[str, dict] = {}
+            def get_profile(team: str) -> dict:
+                if team not in profile_cache:
+                    profile_cache[team] = build_team_profile(matches, team, team_metrics.get(team, {}))
+                return profile_cache[team]
+
             for fixture in fixtures:
                 home = str(fixture["home_team"])
                 away = str(fixture["away_team"])
                 match_date = str(fixture.get("date") or target)[:10]
                 try:
-                    prediction = MatchPredictor(matches, team_metrics=team_metrics).predict(home, away).model_dump()
+                    prediction = predictor.predict(home, away).model_dump()
                     match_context = get_match_context(conn, home, away, match_date=match_date)
                     simulation = simulate_advanced_match(
                         matches,
@@ -381,6 +414,9 @@ def create_app(db_path: Path | str | None = None) -> FastAPI:
                         away,
                         simulations=simulations,
                         match_context=match_context,
+                        predictor=predictor,
+                        home_profile=get_profile(home),
+                        away_profile=get_profile(away),
                     )
                 except Exception as exc:
                     skipped += 1
@@ -673,48 +709,51 @@ def create_app(db_path: Path | str | None = None) -> FastAPI:
 
     @app.get("/api/data-explorer/competitions")
     def data_explorer_competitions() -> dict:
-        init_db(resolved_db_path)
-        with connect(resolved_db_path) as conn:
-            rows = conn.execute(
-                """
-                WITH combined AS (
-                    SELECT competition AS competition, season AS season, date AS match_date,
-                           CASE WHEN home_goals IS NOT NULL AND away_goals IS NOT NULL THEN 1 ELSE 0 END AS finished,
-                           0 AS upcoming,
-                           'historical' AS source
-                    FROM matches
-                    WHERE NOT EXISTS (
-                        SELECT 1
-                        FROM api_football_fixtures f
-                        WHERE matches.date = substr(f.date, 1, 10)
-                          AND lower(matches.home_team) = lower(f.home_team)
-                          AND lower(matches.away_team) = lower(f.away_team)
-                          AND lower(matches.competition) = lower(f.league_name)
-                          AND CAST(matches.season AS TEXT) = CAST(f.season AS TEXT)
+        def factory() -> dict:
+            init_db(resolved_db_path)
+            with connect(resolved_db_path) as conn:
+                rows = conn.execute(
+                    """
+                    WITH combined AS (
+                        SELECT competition AS competition, season AS season, date AS match_date,
+                               CASE WHEN home_goals IS NOT NULL AND away_goals IS NOT NULL THEN 1 ELSE 0 END AS finished,
+                               0 AS upcoming,
+                               'historical' AS source
+                        FROM matches
+                        WHERE NOT EXISTS (
+                            SELECT 1
+                            FROM api_football_fixtures f
+                            WHERE matches.date = substr(f.date, 1, 10)
+                              AND lower(matches.home_team) = lower(f.home_team)
+                              AND lower(matches.away_team) = lower(f.away_team)
+                              AND lower(matches.competition) = lower(f.league_name)
+                              AND CAST(matches.season AS TEXT) = CAST(f.season AS TEXT)
+                        )
+                        UNION ALL
+                        SELECT league_name AS competition, CAST(season AS TEXT) AS season, substr(date, 1, 10) AS match_date,
+                               CASE WHEN status_short IN ('FT', 'AET', 'PEN') THEN 1 ELSE 0 END AS finished,
+                               CASE WHEN status_short NOT IN ('FT', 'AET', 'PEN', 'CANC', 'PST') THEN 1 ELSE 0 END AS upcoming,
+                               'api-football' AS source
+                        FROM api_football_fixtures
                     )
-                    UNION ALL
-                    SELECT league_name AS competition, CAST(season AS TEXT) AS season, substr(date, 1, 10) AS match_date,
-                           CASE WHEN status_short IN ('FT', 'AET', 'PEN') THEN 1 ELSE 0 END AS finished,
-                           CASE WHEN status_short NOT IN ('FT', 'AET', 'PEN', 'CANC', 'PST') THEN 1 ELSE 0 END AS upcoming,
-                           'api-football' AS source
-                    FROM api_football_fixtures
-                )
-                SELECT COALESCE(competition, 'Unknown') AS competition,
-                       COALESCE(season, '-') AS season,
-                       COUNT(*) AS rows,
-                       SUM(finished) AS finished,
-                       SUM(upcoming) AS upcoming,
-                       MIN(match_date) AS first_date,
-                       MAX(match_date) AS last_date,
-                       GROUP_CONCAT(DISTINCT source) AS sources
-                FROM combined
-                WHERE competition IS NOT NULL
-                GROUP BY competition, season
-                ORDER BY rows DESC, competition
-                LIMIT 200
-                """
-            ).fetchall()
-        return {"competitions": [dict(row) for row in rows]}
+                    SELECT COALESCE(competition, 'Unknown') AS competition,
+                           COALESCE(season, '-') AS season,
+                           COUNT(*) AS rows,
+                           SUM(finished) AS finished,
+                           SUM(upcoming) AS upcoming,
+                           MIN(match_date) AS first_date,
+                           MAX(match_date) AS last_date,
+                           GROUP_CONCAT(DISTINCT source) AS sources
+                    FROM combined
+                    WHERE competition IS NOT NULL
+                    GROUP BY competition, season
+                    ORDER BY rows DESC, competition
+                    LIMIT 200
+                    """
+                ).fetchall()
+            return {"competitions": [dict(row) for row in rows]}
+
+        return cached("data_explorer_competitions", 60, factory)
 
     @app.get("/api/data-explorer/fixtures")
     def data_explorer_fixtures(
@@ -926,7 +965,8 @@ def create_app(db_path: Path | str | None = None) -> FastAPI:
     def save_tracking_snapshot(request: TrackingSnapshotRequest) -> dict:
         matches = load_matches()
         team_metrics = load_team_metrics()
-        prediction = MatchPredictor(matches, team_metrics=team_metrics).predict(request.home_team, request.away_team)
+        predictor = load_predictor()
+        prediction = predictor.predict(request.home_team, request.away_team)
         with connect(resolved_db_path) as conn:
             venue = get_venue(conn, request.venue_id)
             match_context = get_match_context(conn, request.home_team, request.away_team, request.match_date)
@@ -939,13 +979,15 @@ def create_app(db_path: Path | str | None = None) -> FastAPI:
             mode=request.mode,
             venue=venue,
             match_context=match_context,
+            predictor=predictor,
+            home_profile=load_factor_profile(request.home_team),
+            away_profile=load_factor_profile(request.away_team),
         )
         markets = apply_market_calibration(
             estimate_secondary_markets(load_advanced_stats(), request.home_team, request.away_team),
             load_prediction_backtest_metrics(),
         )
-        with connect(resolved_db_path) as conn:
-            player_markets = estimate_player_markets(conn, request.home_team, request.away_team, markets)
+        player_markets = load_player_markets(request.home_team, request.away_team, markets)
         with connect(resolved_db_path) as quality_conn:
             quality_snapshot = data_coverage(quality_conn)
         probs = prediction.model_dump()
@@ -1339,11 +1381,10 @@ def create_app(db_path: Path | str | None = None) -> FastAPI:
 
     @app.post("/api/predict")
     def predict(request: PredictionRequest) -> dict:
-        prediction = MatchPredictor(load_matches(), team_metrics=load_team_metrics()).predict(request.home_team, request.away_team)
+        prediction = load_predictor().predict(request.home_team, request.away_team)
         payload = prediction.model_dump()
         markets = estimate_secondary_markets(load_advanced_stats(), request.home_team, request.away_team)
-        with connect(resolved_db_path) as conn:
-            payload["player_markets"] = estimate_player_markets(conn, request.home_team, request.away_team, markets)
+        payload["player_markets"] = load_player_markets(request.home_team, request.away_team, markets)
         if request.save:
             with connect(resolved_db_path) as conn:
                 payload["id"] = insert_prediction(conn, payload)
@@ -1353,8 +1394,7 @@ def create_app(db_path: Path | str | None = None) -> FastAPI:
 
     @app.post("/api/simulate")
     def simulate(request: SimulationRequest) -> dict:
-        predictor = MatchPredictor(load_matches(), team_metrics=load_team_metrics())
-        return simulate_match(predictor, request.home_team, request.away_team, simulations=request.simulations)
+        return simulate_match(load_predictor(), request.home_team, request.away_team, simulations=request.simulations)
 
     @app.post("/api/simulate/advanced")
     def simulate_advanced(request: SimulationRequest) -> dict:
@@ -1370,18 +1410,15 @@ def create_app(db_path: Path | str | None = None) -> FastAPI:
             mode=request.mode,
             venue=venue,
             match_context=match_context,
+            predictor=load_predictor(),
+            home_profile=load_factor_profile(request.home_team),
+            away_profile=load_factor_profile(request.away_team),
         )
         result["secondary_markets"] = apply_market_calibration(
             estimate_secondary_markets(load_advanced_stats(), request.home_team, request.away_team),
             load_prediction_backtest_metrics(),
         )
-        with connect(resolved_db_path) as conn:
-            result["player_markets"] = estimate_player_markets(
-                conn,
-                request.home_team,
-                request.away_team,
-                result["secondary_markets"],
-            )
+        result["player_markets"] = load_player_markets(request.home_team, request.away_team, result["secondary_markets"])
         with connect(resolved_db_path) as conn:
             insert_experiment(
                 conn,
@@ -1391,7 +1428,6 @@ def create_app(db_path: Path | str | None = None) -> FastAPI:
                 metrics=result.get("simulation", {}),
             )
             conn.commit()
-            clear_cache()
         return result
 
     @app.post("/api/simulate/fixtures")
@@ -1403,13 +1439,13 @@ def create_app(db_path: Path | str | None = None) -> FastAPI:
                 [fixture.model_dump() for fixture in request.fixtures],
                 simulations=request.simulations,
                 mode=request.mode,
+                predictor=load_predictor(),
             )
         }
 
     @app.get("/api/team-profile/{team}")
     def team_profile(team: str) -> dict:
-        metrics = load_team_metrics()
-        return build_team_profile(load_matches(), team, metrics.get(team, {}))
+        return load_factor_profile(team)
 
     return app
 

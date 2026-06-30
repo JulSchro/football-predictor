@@ -148,6 +148,13 @@ def ensure_schema_compatibility(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_api_fixtures_league_season ON api_football_fixtures(league_id, season);
         CREATE INDEX IF NOT EXISTS idx_api_fixtures_status ON api_football_fixtures(status_short);
         CREATE INDEX IF NOT EXISTS idx_api_fixtures_match_lookup ON api_football_fixtures(home_team, away_team, league_name, season);
+        CREATE INDEX IF NOT EXISTS idx_api_fixtures_dedupe_lookup ON api_football_fixtures(
+            substr(date, 1, 10),
+            lower(home_team),
+            lower(away_team),
+            lower(league_name),
+            CAST(season AS TEXT)
+        );
         CREATE INDEX IF NOT EXISTS idx_prediction_backtests_date_id ON prediction_backtests(match_date DESC, id DESC);
         CREATE INDEX IF NOT EXISTS idx_prediction_backtests_pending ON prediction_backtests(actual_home_goals, actual_away_goals, match_date);
         CREATE INDEX IF NOT EXISTS idx_prediction_backtests_match ON prediction_backtests(match_date, home_team, away_team);
@@ -155,11 +162,13 @@ def ensure_schema_compatibility(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_advanced_stats_team_date ON match_team_advanced_stats(team, date);
         CREATE INDEX IF NOT EXISTS idx_advanced_stats_opponent ON match_team_advanced_stats(opponent);
         CREATE INDEX IF NOT EXISTS idx_player_season_stats_team ON player_season_stats(team_name, season);
+        CREATE INDEX IF NOT EXISTS idx_player_season_stats_team_nocase ON player_season_stats(team_name COLLATE NOCASE, season);
         CREATE INDEX IF NOT EXISTS idx_player_season_stats_player_team ON player_season_stats(player_id, team_name);
         CREATE INDEX IF NOT EXISTS idx_player_match_stats_fixture ON player_match_stats(fixture_id);
         CREATE INDEX IF NOT EXISTS idx_lineups_fixture_team ON lineups(fixture_id, team_name);
         CREATE INDEX IF NOT EXISTS idx_player_availability_fixture_team ON player_availability(fixture_id, team);
         CREATE INDEX IF NOT EXISTS idx_player_availability_team_player ON player_availability(team, player_id);
+        CREATE INDEX IF NOT EXISTS idx_player_availability_team_nocase ON player_availability(team COLLATE NOCASE, player_id);
         """
     )
 

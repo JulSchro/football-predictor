@@ -8,6 +8,7 @@ import sqlite3
 from football_predictor.data.api_clients import ApiFootballClient
 from football_predictor.database.db import (
     get_sync_inventory,
+    find_venue,
     insert_matches,
     upsert_advanced_stats,
     upsert_api_football_fixture,
@@ -115,23 +116,24 @@ def fixture_to_match_row(row: dict[str, Any]) -> dict | None:
     }
 
 
-def fixture_to_context_row(row: dict[str, Any]) -> dict | None:
+def fixture_to_context_row(row: dict[str, Any], conn: sqlite3.Connection | None = None) -> dict | None:
     normalized = normalize_fixture(row)
     if normalized["fixture_id"] is None:
         return None
     league = row.get("league") or {}
     fixture = row.get("fixture") or {}
     venue = fixture.get("venue") or {}
+    matched_venue = find_venue(conn, venue.get("name"), venue.get("city")) if conn is not None else None
     context = normalize_competition_context(normalized["league_name"], league.get("round"))
     return {
         "match_key": f"api-football:{normalized['fixture_id']}",
         "date": str(normalized["date"] or "")[:10] or None,
         "home_team": normalized["home_team"],
         "away_team": normalized["away_team"],
-        "venue_id": None,
-        "stadium_name": venue.get("name"),
-        "city": venue.get("city"),
-        "country": None,
+        "venue_id": matched_venue.get("id") if matched_venue else None,
+        "stadium_name": (matched_venue.get("stadium_name") if matched_venue else venue.get("name")),
+        "city": (matched_venue.get("city") if matched_venue else venue.get("city")),
+        "country": matched_venue.get("country") if matched_venue else None,
         "neutral": None,
         "competition_weight": round(float(context["pressure_index"]) / 100, 3),
         "stage": context["stage"],
@@ -627,7 +629,7 @@ def _store_fixture_payload(conn: sqlite3.Connection, payload: dict) -> dict:
         if normalized["fixture_id"] is None:
             continue
         upsert_api_football_fixture(conn, normalized)
-        context_row = fixture_to_context_row(row)
+        context_row = fixture_to_context_row(row, conn)
         if context_row:
             upsert_match_context(conn, context_row)
         teams.extend([normalized["home_team"], normalized["away_team"]])

@@ -66,6 +66,7 @@ from football_predictor.database.db import (
     insert_daily_job,
     reconcile_prediction_backtests_for_date,
     list_sync_inventory,
+    backfill_match_context_venues,
     upsert_team_alias,
     upsert_data_source_requirement,
 )
@@ -704,6 +705,17 @@ def backfill_match_context(
     init_db(db_path)
     with connect(db_path) as conn:
         result = backfill_match_context_from_api_fixtures(conn, league_id=league, season=season)
+        conn.commit()
+    typer.echo(json.dumps(result, indent=2))
+
+
+@app.command("backfill-venue-matching")
+def backfill_venue_matching(
+    db_path: Path = settings.db_path,
+) -> None:
+    init_db(db_path)
+    with connect(db_path) as conn:
+        result = backfill_match_context_venues(conn)
         conn.commit()
     typer.echo(json.dumps(result, indent=2))
 

@@ -491,6 +491,149 @@ def upsert_venue(conn: sqlite3.Connection, venue: dict) -> None:
     )
 
 
+def _venue_key(value: str | None) -> str:
+    if not value:
+        return ""
+    normalized = unicodedata.normalize("NFKD", str(value))
+    ascii_value = normalized.encode("ascii", "ignore").decode("ascii").lower()
+    ascii_value = re.sub(r"\([^)]*\)", " ", ascii_value)
+    ascii_value = re.sub(r"(stadium|stadio|estadio|stadion)\b", " ", ascii_value)
+    ascii_value = re.sub(r"\b(stadium|stadio|estadio|stadion|arena|park|field|the)\b", " ", ascii_value)
+    ascii_value = re.sub(r"[^a-z0-9]+", " ", ascii_value)
+    words = [word for word in ascii_value.split() if word not in {"de", "del", "do", "da", "dos", "das"}]
+    return " ".join(words)
+
+
+def _venue_aliases(value: str | None) -> list[str]:
+    if not value:
+        return []
+    aliases = [value]
+    aliases.extend(re.findall(r"\(([^)]+)\)", str(value)))
+    cleaned = re.sub(r"\([^)]*\)", " ", str(value)).strip()
+    if cleaned:
+        aliases.append(cleaned)
+    keys = []
+    for alias in aliases:
+        key = _venue_key(alias)
+        if key and key not in keys:
+            keys.append(key)
+    return keys
+
+
+def find_venue(conn: sqlite3.Connection, stadium_name: str | None, city: str | None = None, country: str | None = None) -> dict | None:
+    if not stadium_name:
+        return None
+    clauses = ["stadium_name IS NOT NULL"]
+    params: list[str] = []
+    if city:
+        clauses.append("(lower(city) = lower(?) OR city IS NULL)")
+        params.append(city)
+    if country:
+        clauses.append("(lower(country) = lower(?) OR country IS NULL)")
+        params.append(country)
+    rows = conn.execute(
+        f"""
+        SELECT id, source_id, stadium_name, city, country, capacity, latitude, longitude, altitude_m, surface, roof
+        FROM venues
+        WHERE {" AND ".join(clauses)}
+        """,
+        tuple(params),
+    ).fetchall()
+    target_keys = _venue_aliases(stadium_name)
+    city_key = _venue_key(city)
+    best: tuple[int, dict] | None = None
+    for row in rows:
+        item = dict(row)
+        venue_keys = _venue_aliases(item.get("stadium_name"))
+        if not set(target_keys).intersection(venue_keys):
+            continue
+        score = 10
+        if city_key and _venue_key(item.get("city")) == city_key:
+            score += 5
+        if item.get("capacity"):
+            score += 1
+        if best is None or score > best[0]:
+            best = (score, item)
+    return best[1] if best else None
+
+
+def _best_venue_from_rows(venues: list[dict], stadium_name: str | None, city: str | None = None, country: str | None = None) -> dict | None:
+    target_keys = _venue_aliases(stadium_name)
+    if not target_keys:
+        return None
+    city_key = _venue_key(city)
+    country_key = _venue_key(country)
+    best: tuple[int, dict] | None = None
+    for venue in venues:
+        has_exact_key = bool(set(target_keys).intersection(venue["_keys"]))
+        has_same_city = bool(city_key and venue["_city_key"] == city_key)
+        has_safe_partial = has_same_city and any(
+            len(target_key) >= 5
+            and len(venue_key) >= 5
+            and (target_key in venue_key or venue_key in target_key)
+            for target_key in target_keys
+            for venue_key in venue["_keys"]
+        )
+        if not has_exact_key and not has_safe_partial:
+            continue
+        score = 10
+        if has_same_city:
+            score += 5
+        if country_key and venue["_country_key"] == country_key:
+            score += 2
+        if venue.get("capacity"):
+            score += 1
+        if best is None or score > best[0]:
+            best = (score, venue)
+    return best[1] if best else None
+
+
+def backfill_match_context_venues(conn: sqlite3.Connection) -> dict:
+    rows = conn.execute(
+        """
+        SELECT id, stadium_name, city, country
+        FROM match_context
+        WHERE stadium_name IS NOT NULL
+          AND stadium_name != ''
+          AND venue_id IS NULL
+        """
+    ).fetchall()
+    venue_rows = conn.execute(
+        """
+        SELECT id, source_id, stadium_name, city, country, capacity, latitude, longitude, altitude_m, surface, roof
+        FROM venues
+        WHERE stadium_name IS NOT NULL
+        """
+    ).fetchall()
+    venues = []
+    for row in venue_rows:
+        item = dict(row)
+        item["_keys"] = _venue_aliases(item.get("stadium_name"))
+        item["_city_key"] = _venue_key(item.get("city"))
+        item["_country_key"] = _venue_key(item.get("country"))
+        venues.append(item)
+    matched = 0
+    unmatched = 0
+    for row in rows:
+        venue = _best_venue_from_rows(venues, row["stadium_name"], row["city"], row["country"])
+        if not venue:
+            unmatched += 1
+            continue
+        conn.execute(
+            """
+            UPDATE match_context
+            SET venue_id = ?,
+                stadium_name = COALESCE(?, stadium_name),
+                city = COALESCE(?, city),
+                country = COALESCE(?, country)
+            WHERE id = ?
+            """,
+            (venue["id"], venue["stadium_name"], venue["city"], venue["country"], row["id"]),
+        )
+        matched += 1
+    return {"contexts_checked": len(rows), "venues_loaded": len(venues), "matched": matched, "unmatched": unmatched}
+
+
 def upsert_squad_player(conn: sqlite3.Connection, player: dict) -> None:
     conn.execute(
         """

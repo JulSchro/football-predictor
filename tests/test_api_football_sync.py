@@ -18,10 +18,14 @@ from football_predictor.data.api_football_sync import (
 )
 from football_predictor.database.db import (
     connect,
+    backfill_match_context_venues,
     count_matches_shadowed_by_api_football,
     delete_matches_shadowed_by_api_football,
+    find_venue,
     init_db,
     insert_matches,
+    upsert_match_context,
+    upsert_venue,
 )
 
 
@@ -68,6 +72,78 @@ def test_fixture_to_context_row_classifies_group_stage() -> None:
     assert row["stage"] == "group_stage"
     assert row["competition_weight"] > 0.5
     assert row["raw"]["context"]["is_group_stage"] is True
+
+
+def test_find_venue_matches_alias_inside_parentheses(tmp_path) -> None:
+    db_path = tmp_path / "venues.sqlite"
+    init_db(db_path)
+    with connect(db_path) as conn:
+        upsert_venue(
+            conn,
+            {
+                "source_id": "1",
+                "stadium_name": "AT&T Stadium",
+                "city": "Arlington",
+                "country": "USA",
+                "capacity": 80000,
+                "latitude": None,
+                "longitude": None,
+                "altitude_m": None,
+                "surface": "grass",
+                "roof": None,
+                "raw": {},
+            },
+        )
+        conn.commit()
+        venue = find_venue(conn, "Dallas Stadium (AT&T Stadium)", "Arlington")
+
+    assert venue is not None
+    assert venue["stadium_name"] == "AT&T Stadium"
+
+
+def test_backfill_match_context_venues_sets_venue_id(tmp_path) -> None:
+    db_path = tmp_path / "venues.sqlite"
+    init_db(db_path)
+    with connect(db_path) as conn:
+        upsert_venue(
+            conn,
+            {
+                "source_id": "2",
+                "stadium_name": "Estadio Azteca",
+                "city": "Mexico City",
+                "country": "Mexico",
+                "capacity": 87000,
+                "latitude": None,
+                "longitude": None,
+                "altitude_m": None,
+                "surface": "grass",
+                "roof": None,
+                "raw": {},
+            },
+        )
+        upsert_match_context(
+            conn,
+            {
+                "match_key": "api-football:123",
+                "date": "2026-06-11",
+                "home_team": "Mexico",
+                "away_team": "France",
+                "venue_id": None,
+                "stadium_name": "Estadio Azteca",
+                "city": "Mexico City",
+                "country": None,
+                "neutral": None,
+                "competition_weight": 0.8,
+                "stage": "group_stage",
+                "raw": {},
+            },
+        )
+        result = backfill_match_context_venues(conn)
+        row = conn.execute("SELECT venue_id, country FROM match_context WHERE match_key = ?", ("api-football:123",)).fetchone()
+
+    assert result["matched"] == 1
+    assert row["venue_id"] is not None
+    assert row["country"] == "Mexico"
 
 
 def test_normalize_fixture_statistics_maps_api_types() -> None:

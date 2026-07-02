@@ -2,6 +2,7 @@ from pathlib import Path
 
 from football_predictor.database.db import (
     connect,
+    delete_prediction_backtest,
     delete_pending_prediction_backtest,
     init_db,
     update_prediction_backtest_result,
@@ -9,6 +10,35 @@ from football_predictor.database.db import (
 )
 from football_predictor.evaluation.prediction_backtest import compute_backtest_metrics, load_backtest_file
 from football_predictor.prediction.calibration import apply_market_calibration
+
+
+def _backtest_row(**overrides: object) -> dict:
+    row = {
+        "match_date": "2026-06-28",
+        "competition": "World Cup 2026",
+        "home_team": "Mexico",
+        "away_team": "France",
+        "model_version": "test",
+        "predicted_home_prob": 0.2,
+        "predicted_draw_prob": 0.25,
+        "predicted_away_prob": 0.55,
+        "predicted_pick": "away",
+        "predicted_scores_json": "[]",
+        "predicted_corners": 8.0,
+        "predicted_shots_on_target": 7.0,
+        "predicted_cards": 3.0,
+        "predicted_over_2_5_prob": 0.5,
+        "predicted_btts_prob": 0.45,
+        "actual_home_goals": None,
+        "actual_away_goals": None,
+        "actual_corners": None,
+        "actual_shots_on_target": None,
+        "actual_cards": None,
+        "source": "test",
+        "notes": "",
+    }
+    row.update(overrides)
+    return row
 
 
 def test_prediction_backtest_metrics_detect_hits_and_biases() -> None:
@@ -66,7 +96,16 @@ def test_load_backtest_file_normalizes_csv(tmp_path: Path) -> None:
 
 
 def test_market_calibration_reduces_positive_bias() -> None:
-    markets = {"total_cards_expected": 4.8, "total_corners_expected": 9.0}
+    markets = {
+        "total_cards_expected": 4.8,
+        "total_corners_expected": 9.0,
+        "home_corners_expected": 5.0,
+        "away_corners_expected": 4.0,
+        "team_markets": {
+            "home": {"corners_expected": 5.0},
+            "away": {"corners_expected": 4.0},
+        },
+    }
     metrics = {
         "market_metrics": {
             "cards": {"bias": 1.8},
@@ -78,36 +117,16 @@ def test_market_calibration_reduces_positive_bias() -> None:
 
     assert calibrated["total_cards_expected"] == 3.0
     assert calibrated["total_corners_expected"] == 8.5
+    assert calibrated["home_corners_expected"] == 4.72
+    assert calibrated["away_corners_expected"] == 3.78
+    assert calibrated["team_markets"]["home"]["corners_range"]["label"]
     assert calibrated["calibration"]["applied"] is True
 
 
 def test_delete_pending_prediction_backtest_keeps_evaluated_history(tmp_path: Path) -> None:
     db_path = tmp_path / "tracking.sqlite"
     init_db(db_path)
-    row = {
-        "match_date": "2026-06-28",
-        "competition": "Manual",
-        "home_team": "Mexico",
-        "away_team": "France",
-        "model_version": "test",
-        "predicted_home_prob": 0.2,
-        "predicted_draw_prob": 0.25,
-        "predicted_away_prob": 0.55,
-        "predicted_pick": "away",
-        "predicted_scores_json": "[]",
-        "predicted_corners": 8.0,
-        "predicted_shots_on_target": 7.0,
-        "predicted_cards": 3.0,
-        "predicted_over_2_5_prob": 0.5,
-        "predicted_btts_prob": 0.45,
-        "actual_home_goals": None,
-        "actual_away_goals": None,
-        "actual_corners": None,
-        "actual_shots_on_target": None,
-        "actual_cards": None,
-        "source": "test",
-        "notes": "",
-    }
+    row = _backtest_row(competition="Manual")
 
     with connect(db_path) as conn:
         upsert_prediction_backtest(conn, row)
@@ -121,3 +140,97 @@ def test_delete_pending_prediction_backtest_keeps_evaluated_history(tmp_path: Pa
             {"actual_home_goals": 0, "actual_away_goals": 2, "actual_corners": None, "actual_shots_on_target": None, "actual_cards": None, "notes": None},
         )
         assert delete_pending_prediction_backtest(conn, evaluated_id) == 0
+
+
+def test_delete_prediction_backtest_removes_evaluated_history_item(tmp_path: Path) -> None:
+    db_path = tmp_path / "tracking.sqlite"
+    init_db(db_path)
+    with connect(db_path) as conn:
+        upsert_prediction_backtest(
+            conn,
+            _backtest_row(
+                actual_home_goals=0,
+                actual_away_goals=2,
+                actual_corners=8,
+                actual_shots_on_target=10,
+                actual_cards=3,
+            ),
+        )
+        evaluated_id = conn.execute("SELECT id FROM prediction_backtests").fetchone()[0]
+        assert delete_prediction_backtest(conn, evaluated_id) == 1
+        assert conn.execute("SELECT COUNT(*) FROM prediction_backtests").fetchone()[0] == 0
+
+
+def test_upsert_prediction_backtest_preserves_existing_actuals(tmp_path: Path) -> None:
+    db_path = tmp_path / "tracking.sqlite"
+    init_db(db_path)
+
+    with connect(db_path) as conn:
+        upsert_prediction_backtest(
+            conn,
+            _backtest_row(
+                competition="World Cup",
+                actual_home_goals=1,
+                actual_away_goals=2,
+                actual_corners=8,
+                actual_shots_on_target=10,
+                actual_cards=4,
+            ),
+        )
+        upsert_prediction_backtest(
+            conn,
+            _backtest_row(
+                predicted_home_prob=0.3,
+                predicted_draw_prob=0.3,
+                predicted_away_prob=0.4,
+                predicted_corners=9.5,
+            ),
+        )
+
+        saved = dict(conn.execute("SELECT * FROM prediction_backtests").fetchone())
+
+    assert saved["predicted_home_prob"] == 0.3
+    assert saved["competition"] == "World Cup 2026"
+    assert saved["predicted_corners"] == 9.5
+    assert saved["actual_home_goals"] == 1
+    assert saved["actual_away_goals"] == 2
+    assert saved["actual_corners"] == 8
+    assert saved["actual_shots_on_target"] == 10
+    assert saved["actual_cards"] == 4
+
+
+def test_update_prediction_backtest_result_preserves_existing_actual_markets(tmp_path: Path) -> None:
+    db_path = tmp_path / "tracking.sqlite"
+    init_db(db_path)
+
+    with connect(db_path) as conn:
+        upsert_prediction_backtest(
+            conn,
+            _backtest_row(
+                actual_home_goals=1,
+                actual_away_goals=2,
+                actual_corners=8,
+                actual_shots_on_target=10,
+                actual_cards=4,
+            ),
+        )
+        backtest_id = conn.execute("SELECT id FROM prediction_backtests").fetchone()[0]
+        update_prediction_backtest_result(
+            conn,
+            backtest_id,
+            {
+                "actual_home_goals": 2,
+                "actual_away_goals": 2,
+                "actual_corners": None,
+                "actual_shots_on_target": None,
+                "actual_cards": None,
+                "notes": None,
+            },
+        )
+        saved = dict(conn.execute("SELECT * FROM prediction_backtests").fetchone())
+
+    assert saved["actual_home_goals"] == 2
+    assert saved["actual_away_goals"] == 2
+    assert saved["actual_corners"] == 8
+    assert saved["actual_shots_on_target"] == 10
+    assert saved["actual_cards"] == 4

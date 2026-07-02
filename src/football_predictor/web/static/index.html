@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>FootballPredictor</title>
-  <link rel="stylesheet" href="/styles.css?v=5">
+  <link rel="stylesheet" href="/styles.css?v=6">
 </head>
 <body>
   <aside class="sidebar">
@@ -90,25 +90,25 @@
     </section>
 
     <section class="view" id="view-prediction">
-      <div class="prediction-command">
-        <section class="panel control-panel">
-          <div class="section-title"><span>Partido</span><small>entrada del modelo</small></div>
-          <label for="homeTeam">Local</label>
+      <section class="prediction-ticket">
+        <aside class="prediction-input-card">
+          <div class="section-title"><span>Configurar partido</span><small id="quickStatus">Esperando seleccion</small></div>
+          <label for="homeTeam">Equipo local</label>
           <select id="homeTeam"></select>
-          <label for="awayTeam">Visitante</label>
+          <label for="awayTeam">Equipo visitante</label>
           <select id="awayTeam"></select>
-          <label for="venueSelect">Sede</label>
+          <label for="venueSelect">Estadio</label>
           <select id="venueSelect"></select>
           <div class="two-cols">
             <div>
-              <label for="simulationCount">Corridas</label>
+              <label for="simulationCount">Simulaciones</label>
               <input id="simulationCount" type="number" min="1000" max="200000" step="1000" value="20000">
             </div>
             <div>
-              <label for="simulationMode">Modo</label>
+              <label for="simulationMode">Perfil</label>
               <select id="simulationMode">
-                <option value="hybrid">Hibrido</option>
-                <option value="poker">Poker</option>
+                <option value="hybrid">Balanceado</option>
+                <option value="poker">Agresivo</option>
                 <option value="classic">Clasico</option>
               </select>
             </div>
@@ -118,49 +118,35 @@
             <button onclick="runPrediction()">Predecir</button>
             <button class="secondary" onclick="runSimulation()">Simular</button>
           </div>
-        </section>
+        </aside>
 
-        <section class="panel decision-panel">
-          <div class="section-title"><span>Decision del modelo</span><small id="quickStatus">Esperando seleccion</small></div>
-          <div id="predictionPanel" class="empty-state">Ejecuta una prediccion para ver favorito, confianza y recomendacion.</div>
-        </section>
-      </div>
-
-      <div class="product-tabs" data-tab-group="prediction">
-        <button class="active" type="button" data-tab-target="prediction-summary">Resumen</button>
-        <button type="button" data-tab-target="prediction-factors">Factores</button>
-        <button type="button" data-tab-target="prediction-profiles">Perfiles</button>
-      </div>
-
-      <section class="tab-pane active" id="prediction-summary">
-        <section class="hero-panel match-stage">
-          <div class="match-title">
-            <span id="homeName">Local</span>
-            <b>vs</b>
-            <span id="awayName">Visitante</span>
+        <div class="prediction-workspace">
+          <div id="predictionPanel" class="prediction-empty">
+            <b>Elige un partido y presiona Predecir.</b>
+            <span>Primero veras mejores picks, confianza y mercados principales. La simulacion agrega escenarios y explicacion.</span>
           </div>
-          <div id="simulationPanel" class="simulation-shell">
-            <div class="empty-state">Corre una simulacion para ver distribucion, escenarios y marcadores.</div>
+          <div id="simulationPanel" class="prediction-simulation-slot">
+            <div class="empty-state">La simulacion avanzada aparecera aqui cuando quieras profundizar.</div>
           </div>
-        </section>
+        </div>
       </section>
 
-      <section class="tab-pane" id="prediction-factors">
-        <section class="panel">
-          <div class="section-title"><span>Factores clave</span><small>ventaja relativa</small></div>
-          <div id="factorCards" class="factor-grid"></div>
-        </section>
-      </section>
-
-      <section class="tab-pane" id="prediction-profiles">
-        <section class="panel">
-          <div class="section-title"><span>Perfiles de equipo</span><small>equipo vs equipo</small></div>
-          <div class="profile-compare">
-            <div><h3>Local <small id="homeSample"></small></h3><div id="homeProfile" class="profile-grid"></div></div>
-            <div><h3>Visitante <small id="awaySample"></small></h3><div id="awayProfile" class="profile-grid"></div></div>
-          </div>
-        </section>
-      </section>
+      <details class="advanced-drawer">
+        <summary>Ver analisis avanzado</summary>
+        <div class="advanced-grid">
+          <section class="panel">
+            <div class="section-title"><span>Factores completos</span><small>impacto relativo</small></div>
+            <div id="factorCards" class="factor-grid"></div>
+          </section>
+          <section class="panel">
+            <div class="section-title"><span>Perfiles de equipo</span><small>equipo vs equipo</small></div>
+            <div class="profile-compare">
+              <div><h3>Local <small id="homeSample"></small></h3><div id="homeProfile" class="profile-grid"></div></div>
+              <div><h3>Visitante <small id="awaySample"></small></h3><div id="awayProfile" class="profile-grid"></div></div>
+            </div>
+          </section>
+        </div>
+      </details>
     </section>
 
     <section class="view" id="view-tracking">
@@ -293,43 +279,82 @@
     </section>
 
     <section class="view" id="view-database">
-      <section class="database-hero">
+      <section class="database-command">
         <div>
-          <span>Inventario local</span>
-          <h2 id="databaseMainSignal">Analizando cobertura guardada</h2>
-          <p id="databaseMainCopy">Revisa qué competiciones y temporadas ya están disponibles antes de gastar requests.</p>
+          <span>Football Data Explorer</span>
+          <h2 id="databaseMainSignal">Analizando universo de datos</h2>
+          <p id="databaseMainCopy">Busca partidos, ligas, equipos, jugadores, estadios, arbitros y cobertura API desde un solo lugar.</p>
         </div>
-        <div class="database-score">
-          <span>Fuente dominante</span>
-          <strong id="databaseSourceSignal">--</strong>
-          <em id="databaseCoverageSignal">Sin medición</em>
+        <div class="database-command-panel">
+          <div class="database-source-pill">
+            <span>Fuente dominante</span>
+            <strong id="databaseSourceSignal">--</strong>
+            <em id="databaseCoverageSignal">Sin medicion</em>
+          </div>
+          <button onclick="loadDataExplorer()">Actualizar vista</button>
         </div>
       </section>
 
       <div class="database-inventory-grid" id="databaseInventory"></div>
 
-      <section class="panel">
-        <div class="section-title"><span>Explorador de datos</span><small>fixtures, partidos y fuentes</small></div>
-        <div id="dataExplorerTotals" class="summary-grid compact-summary"></div>
-        <div class="explorer-filters">
-          <div><label for="explorerSearch">Buscar</label><input id="explorerSearch" placeholder="Equipo, liga, estadio"></div>
-          <div><label for="explorerCompetition">Competicion</label><select id="explorerCompetition"></select></div>
-          <div><label for="explorerStatus">Estado</label><select id="explorerStatus">
+      <section class="database-shell">
+        <div class="database-searchbar">
+          <div class="spotlight-box">
+            <span>Buscar</span>
+            <input id="explorerSearch" placeholder="Real Madrid, Mundial, fixture ID, estadio, jugador..." oninput="scheduleDataExplorerSearch()">
+          </div>
+          <button class="secondary" onclick="toggleAdvancedDatabaseFilters()">Filtros avanzados</button>
+          <button onclick="exportDatabaseCsv()">Exportar CSV</button>
+        </div>
+
+        <div class="database-quick-chips">
+          <button class="active" data-db-chip="all" onclick="setDatabaseQuickFilter('all')">Todos</button>
+          <button data-db-chip="today" onclick="setDatabaseQuickFilter('today')">Hoy</button>
+          <button data-db-chip="live" onclick="setDatabaseQuickFilter('live')">En vivo</button>
+          <button data-db-chip="upcoming" onclick="setDatabaseQuickFilter('upcoming')">Proximos</button>
+          <button data-db-chip="finished" onclick="setDatabaseQuickFilter('finished')">Finalizados</button>
+          <button data-db-chip="strong" onclick="setDatabaseQuickFilter('strong')">Cobertura fuerte</button>
+          <button data-db-chip="pending" onclick="setDatabaseQuickFilter('pending')">Pendientes</button>
+        </div>
+
+        <div class="explorer-filters" id="databaseAdvancedFilters">
+          <div><label for="explorerCompetition">Competicion</label><select id="explorerCompetition" onchange="loadDataExplorer()"></select></div>
+          <div><label for="explorerStatus">Estado</label><select id="explorerStatus" onchange="loadDataExplorer()">
             <option value="all">Todos</option>
             <option value="upcoming">Proximos</option>
             <option value="live">En vivo</option>
             <option value="finished">Finalizados</option>
           </select></div>
-          <div><label for="explorerFrom">Desde</label><input id="explorerFrom" type="date"></div>
-          <div><label for="explorerTo">Hasta</label><input id="explorerTo" type="date"></div>
-          <button onclick="loadDataExplorer()">Buscar</button>
+          <div><label for="explorerFrom">Desde</label><input id="explorerFrom" type="date" onchange="loadDataExplorer()"></div>
+          <div><label for="explorerTo">Hasta</label><input id="explorerTo" type="date" onchange="loadDataExplorer()"></div>
+          <div><label for="explorerProvider">Proveedor</label><select id="explorerProvider" onchange="renderDataExplorer()">
+            <option value="">Todos</option>
+            <option value="api-football">API-Football</option>
+            <option value="historical">Historico</option>
+          </select></div>
         </div>
+
+        <div class="database-tabs">
+          <button class="active" data-db-tab="matches" onclick="setDatabaseTab('matches')">Partidos</button>
+          <button data-db-tab="competitions" onclick="setDatabaseTab('competitions')">Competiciones</button>
+          <button data-db-tab="teams" onclick="setDatabaseTab('teams')">Equipos</button>
+          <button data-db-tab="players" onclick="setDatabaseTab('players')">Jugadores</button>
+          <button data-db-tab="venues" onclick="setDatabaseTab('venues')">Estadios</button>
+          <button data-db-tab="referees" onclick="setDatabaseTab('referees')">Arbitros</button>
+          <button data-db-tab="apis" onclick="setDatabaseTab('apis')">APIs</button>
+          <button data-db-tab="stats" onclick="setDatabaseTab('stats')">Estadisticas</button>
+        </div>
+
+        <div id="databaseInsights" class="database-insights"></div>
+        <div id="dataExplorerTotals" class="database-mini-totals"></div>
         <div id="fixtureExplorer"></div>
       </section>
-      <section class="panel">
-        <div class="section-title"><span>Inventario por competicion</span><small>cobertura guardada</small></div>
+
+      <section class="panel database-inventory-panel">
+        <div class="section-title"><span>Inventario por competicion</span><small>temporadas descargadas y gasto recomendado</small></div>
         <div id="competitionExplorer"></div>
       </section>
+      <aside id="dataDetailDrawer" class="data-detail-drawer" aria-live="polite"></aside>
     </section>
 
     <section class="view" id="view-data">
@@ -346,16 +371,53 @@
     </section>
 
     <section class="view" id="view-calibration">
-      <div class="analysis-grid">
-        <section class="panel">
-          <div class="section-title"><span>Market bias dashboard</span><small>MAE, RMSE, bias</small></div>
-          <div id="predictionBiases"></div>
-        </section>
-        <section class="panel">
-          <div class="section-title"><span>Calibracion futura</span><small>sin data leakage</small></div>
-          <div id="calibrationPlan" class="calibration-grid"></div>
-        </section>
-      </div>
+      <section class="calibration-hero">
+        <div>
+          <span>AI Calibration Center</span>
+          <h2 id="calibrationHealthTitle">Midiendo salud del modelo</h2>
+          <p id="calibrationHealthCopy">Monitorea precision, sesgos, mercados debiles y recomendaciones de recalibracion sin leer tablas crudas.</p>
+        </div>
+        <div class="calibration-health-gauge" id="calibrationHealthGauge"></div>
+      </section>
+
+      <div id="calibrationKpis" class="calibration-kpi-grid"></div>
+
+      <section class="calibration-shell">
+        <div class="calibration-toolbar">
+          <div>
+            <span>Ventana</span>
+            <select id="calibrationWindow" onchange="renderCalibrationCenter()">
+              <option value="7">7 dias</option>
+              <option value="30" selected>30 dias</option>
+              <option value="90">90 dias</option>
+              <option value="all">Historico</option>
+            </select>
+          </div>
+          <div>
+            <span>Mercado</span>
+            <select id="calibrationMarketFilter" onchange="renderCalibrationCenter()">
+              <option value="all">Todos</option>
+              <option value="winner">Ganador</option>
+              <option value="corners">Corners</option>
+              <option value="shots_on_target">Tiros puerta</option>
+              <option value="cards">Tarjetas</option>
+              <option value="over_2_5">Over 2.5</option>
+              <option value="both_teams_score">BTTS</option>
+            </select>
+          </div>
+          <button onclick="exportCalibrationJson()">Exportar JSON</button>
+        </div>
+
+        <div class="calibration-tabs">
+          <button class="active" data-calibration-tab="overview" onclick="setCalibrationTab('overview')">Resumen</button>
+          <button data-calibration-tab="markets" onclick="setCalibrationTab('markets')">Mercados</button>
+          <button data-calibration-tab="segments" onclick="setCalibrationTab('segments')">Competencias y equipos</button>
+          <button data-calibration-tab="anomalies" onclick="setCalibrationTab('anomalies')">Anomalias</button>
+          <button data-calibration-tab="simulation" onclick="setCalibrationTab('simulation')">Simulacion</button>
+        </div>
+
+        <div id="calibrationWorkspace"></div>
+      </section>
     </section>
 
     <section class="view" id="view-automation">
@@ -418,6 +480,15 @@
     const fmt = value => value === null || value === undefined ? "-" : value;
     const cleanError = value => String(value || "Error desconocido").replace(/\s+/g, " ").slice(0, 260);
     const loadedViews = new Set();
+    let databaseOverview = {};
+    let databaseCompetitions = [];
+    let databaseFixtures = [];
+    let databaseVisibleFixtures = [];
+    let databaseTab = "matches";
+    let databaseSort = {key: "match_date", dir: "desc"};
+    let databaseSearchTimer = null;
+    let calibrationData = null;
+    let calibrationTab = "overview";
     const titles = {
       dashboard: ["Dashboard", "Centro de mando"],
       prediction: ["Prediccion", "Simulador de partido"],
@@ -463,11 +534,11 @@
       if (!force && loadedViews.has(name)) return;
       const loaders = {
         dashboard: [loadSummary, loadPredictionBacktest, loadDataQuality, loadTodayOperations, loadBettingBoard],
-        prediction: [loadTeams, loadVenues],
+        prediction: [loadTeams, loadVenues, loadDataQuality],
         tracking: [loadTodayOperations, loadBettingBoard, loadPendingSnapshots, loadPredictionHistory, loadPredictionBacktest],
         backtesting: [loadBacktest, loadPredictionBacktest],
         competitions: [loadCompetitions],
-        database: [loadDataExplorerCompetitions, loadDataExplorer, loadMatches],
+        database: [loadDatabaseOverview, loadDataExplorerCompetitions, loadDataExplorer],
         data: [loadDataQuality, loadExperiments],
         calibration: [loadPredictionBacktest],
         automation: [loadTodayOperations, loadSummary],
@@ -547,8 +618,10 @@
     }
 
     function updateMatchTitle() {
-      document.querySelector("#homeName").textContent = document.querySelector("#homeTeam").value || "Local";
-      document.querySelector("#awayName").textContent = document.querySelector("#awayTeam").value || "Visitante";
+      const homeTarget = document.querySelector("#homeName");
+      const awayTarget = document.querySelector("#awayName");
+      if (homeTarget) homeTarget.textContent = document.querySelector("#homeTeam").value || "Local";
+      if (awayTarget) awayTarget.textContent = document.querySelector("#awayTeam").value || "Visitante";
     }
 
     async function loadBacktest() {
@@ -598,7 +671,7 @@
     }
 
     async function loadPredictionBacktest() {
-      const data = await getJson("/api/prediction-backtests?limit=100");
+      const data = await getJson("/api/prediction-backtests?limit=500");
       const m = data.metrics;
       const markets = m.market_metrics || {};
       const binary = m.binary_metrics || {};
@@ -631,8 +704,10 @@
           </table>
         </div>
       `;
-      document.querySelector("#predictionBacktest").innerHTML = panel;
-      document.querySelector("#dashboardPerformance").innerHTML = `
+      const backtestEl = document.querySelector("#predictionBacktest");
+      if (backtestEl) backtestEl.innerHTML = panel;
+      const performanceEl = document.querySelector("#dashboardPerformance");
+      if (performanceEl) performanceEl.innerHTML = `
         <div class="backtest-meter">
           <div><span>Partidos</span><strong>${m.matches}</strong></div>
           <div><span>Accuracy</span><strong>${pct(m.strict_accuracy)}</strong></div>
@@ -648,9 +723,10 @@
         ${marketErrorCard("Tiros a puerta", markets.shots_on_target)}
         ${marketErrorCard("Tarjetas", markets.cards)}
       `;
-      document.querySelector("#predictionBiases").innerHTML = biasPanel;
-      document.querySelector("#dashboardBiases").innerHTML = biasPanel;
-      renderCalibrationPlan(markets);
+      const dashboardBiases = document.querySelector("#dashboardBiases");
+      if (dashboardBiases) dashboardBiases.innerHTML = biasPanel;
+      calibrationData = buildCalibrationModel(data);
+      renderCalibrationCenter();
     }
 
     async function loadPredictionHistory() {
@@ -666,7 +742,7 @@
         <div class="table-wrap compact-table">
           <table>
             <thead>
-              <tr><th>Fecha</th><th>Partido</th><th>Competicion</th><th>Modelo</th><th>Pick</th><th>1X2</th><th>Top score</th><th>Real</th><th>Estado</th><th></th></tr>
+              <tr><th>Fecha</th><th>Partido</th><th>Competicion</th><th>Modelo</th><th>Pick</th><th>1X2</th><th>Top score</th><th>Real</th><th>Estado</th><th>Acciones</th></tr>
             </thead>
             <tbody>
               ${rows.map(row => {
@@ -684,7 +760,12 @@
                     <td>${top ? `${top.score} (${pct(top.probability)})` : "-"}</td>
                     <td>${real}</td>
                     <td><span class="status-tag ${row.status === "evaluated" ? "finished" : ""}">${hit}</span></td>
-                    <td><button class="small secondary" onclick="showPredictionDetail(${row.id})">Ver</button></td>
+                    <td>
+                      <div class="table-actions">
+                        <button class="small secondary" onclick="showPredictionDetail(${row.id})">Ver</button>
+                        <button class="small danger" onclick="deletePredictionHistory(${row.id})">Borrar</button>
+                      </div>
+                    </td>
                   </tr>
                 `;
               }).join("")}
@@ -693,6 +774,18 @@
         </div>
       ` : `<div class="empty-state">Todavia no hay snapshots guardados.</div>`;
       document.querySelector("#predictionHistory").innerHTML = table;
+    }
+
+    async function deletePredictionHistory(id) {
+      const ok = confirm("Borrar esta prediccion del historial?");
+      if (!ok) return;
+      const result = await getJson(`/api/prediction-history/${id}`, {method: "DELETE"});
+      if (!result.deleted) {
+        alert("No se pudo borrar esa prediccion.");
+        return;
+      }
+      document.querySelector("#predictionDetail").innerHTML = `<div class="empty-state">Prediccion borrada. Selecciona otra del historial.</div>`;
+      await Promise.all([loadPredictionHistory(), loadPredictionBacktest(), loadPendingSnapshots(), loadBettingBoard()]);
     }
 
     async function showPredictionDetail(id) {
@@ -707,48 +800,135 @@
       const sim = snapshot.simulation || {};
       const favorite = pickLabel(row.predicted_pick);
       const confidence = Math.max(Number(row.predicted_home_prob || 0), Number(row.predicted_draw_prob || 0), Number(row.predicted_away_prob || 0));
+      const savedData = normalizeSavedPrediction(row);
+      const savedPicks = recommendedPicks(savedData, snapshot);
       document.querySelector("#predictionDetail").innerHTML = `
-        <div class="detail-hero">
-          <div>
-            <span>${row.match_date || "-"} · ${row.competition || "-"}</span>
-            <h3>${row.home_team} vs ${row.away_team}</h3>
-            <em>${row.model_version || "-"}</em>
-          </div>
-          <div>
-            <span>Recomendacion</span>
-            <strong>${favorite}</strong>
-            <em>Confianza ${pct(confidence)}</em>
-          </div>
-        </div>
-        <div class="odds-grid detail-grid">
-          ${oddsTile("Local", row.predicted_home_prob)}
-          ${oddsTile("Empate", row.predicted_draw_prob)}
-          ${oddsTile("Visitante", row.predicted_away_prob)}
-          ${oddsTile("Over 2.5", row.predicted_over_2_5_prob)}
-          ${oddsTile("Ambos", row.predicted_btts_prob)}
-        </div>
-        <div class="dual">
-          <div>
-            <h3>Marcadores probables</h3>
-            <div class="score-list">${scores.length ? scores.map(score => `<div><b>${score.score}</b><span>${pct(score.probability)}</span></div>`).join("") : `<div><b>-</b><span>Sin marcadores</span></div>`}</div>
-          </div>
-          <div>
-            <h3>Mercados guardados</h3>
-            <div class="mini-table">
-              <div><span>Corners</span><b>${fmtMetric(row.predicted_corners)}</b></div>
-              <div><span>Tiros puerta</span><b>${fmtMetric(row.predicted_shots_on_target)}</b></div>
-              <div><span>Tarjetas</span><b>${fmtMetric(row.predicted_cards)}</b></div>
+        <section class="saved-detail-desk">
+          <section class="match-summary-card">
+            <div class="match-summary-main saved-detail-main">
+              <div>
+                <span>Snapshot guardado</span>
+                <h3>${row.home_team} vs ${row.away_team}</h3>
+                <p>${row.match_date || "-"} / ${row.competition || "-"} / ${row.model_version || "-"}</p>
+              </div>
+              <div>
+                <strong>${favorite}</strong>
+                <b>Confianza ${pct(confidence)}</b>
+              </div>
             </div>
-          </div>
-        </div>
-        ${renderSavedContext(context)}
-        ${renderPlayerMarkets(snapshot.player_markets || {})}
-        ${renderSnapshotFactors(sim, snapshot.data_quality)}
-        ${renderSavedEvaluation(row)}
+            <div class="summary-kpis saved-kpis">
+              <div><span>Estado</span><b>${row.status === "evaluated" ? "Evaluada" : "Pendiente"}</b></div>
+              <div><span>Prediccion</span><b>${favorite}</b></div>
+              <div><span>Resultado</span><b>${row.actual_score || "Sin resultado"}</b></div>
+            </div>
+          </section>
+
+          <section class="premium-section picks-section">
+            <div class="premium-heading">
+              <span>Picks guardados</span>
+              <b>${savedPicks.length ? "Ordenados por confianza" : "Sin picks fuertes"}</b>
+            </div>
+            <div class="pick-card-grid">
+              ${savedPicks.length ? savedPicks.slice(0, 6).map(renderPickCard).join("") : `<div class="empty-state">Este snapshot no tiene picks con confianza suficiente.</div>`}
+            </div>
+          </section>
+
+          ${renderMonteCarloDecisionDesk(snapshot)}
+
+          <section class="premium-section">
+            <div class="premium-heading"><span>Probabilidades 1X2</span><b>${favorite}</b></div>
+            <div class="probability-board">
+              ${probabilityBar(`Gana ${row.home_team}`, row.predicted_home_prob)}
+              ${probabilityBar("Empate", row.predicted_draw_prob)}
+              ${probabilityBar(`Gana ${row.away_team}`, row.predicted_away_prob)}
+            </div>
+          </section>
+
+          <section class="premium-section">
+            <div class="premium-heading"><span>Mercados principales</span><b>Snapshot</b></div>
+            <div class="market-category-grid main-markets">
+              ${marketCard("Ganador", favorite, confidence)}
+              ${marketCard("Doble oportunidad", doubleChanceLabel(savedData), doubleChanceProb(savedData))}
+              ${marketCard("Ambos anotan", row.predicted_btts_prob >= 0.5 ? "Si" : "No", Math.max(Number(row.predicted_btts_prob || 0), 1 - Number(row.predicted_btts_prob || 0)))}
+              ${marketCard("Mas de 2.5 goles", row.predicted_over_2_5_prob >= 0.5 ? "Si" : "No", Math.max(Number(row.predicted_over_2_5_prob || 0), 1 - Number(row.predicted_over_2_5_prob || 0)))}
+              ${marketCard("Marcador mas probable", scores[0]?.score || "Sin dato", Number(scores[0]?.probability || 0))}
+              ${marketCard("Corners esperados", fmtMetric(row.predicted_corners), null, projectionLabel("corners", row.predicted_corners), "projected")}
+              ${marketCard("Tiros puerta", fmtMetric(row.predicted_shots_on_target), null, projectionLabel("shots_on_target", row.predicted_shots_on_target), "projected")}
+              ${marketCard("Tarjetas", fmtMetric(row.predicted_cards), null, projectionLabel("cards", row.predicted_cards), "projected")}
+            </div>
+          </section>
+
+          ${renderTeamCornersDesk(savedData.markets)}
+          ${renderTeamShotsDesk(savedData.markets)}
+          ${renderPlayerShotsExpected(savedData.player_markets)}
+
+          <section class="premium-section">
+            <div class="premium-heading"><span>Marcadores y mercados por equipo</span><b>Detalle</b></div>
+            <div class="detail-split-grid">
+              <div class="market-category">
+                <h3>Marcadores probables</h3>
+                <div class="score-list">${scores.length ? scores.map(score => `<div><b>${score.score}</b><span>${pct(score.probability)}</span></div>`).join("") : `<div><b>-</b><span>Sin marcadores</span></div>`}</div>
+              </div>
+              <div class="market-category">
+                <h3>Mercados guardados</h3>
+                <div class="mini-table">
+                  <div><span>Corners</span><b>${fmtMetric(row.predicted_corners)}</b></div>
+                  <div><span>Tiros puerta</span><b>${fmtMetric(row.predicted_shots_on_target)}</b></div>
+                  <div><span>Tarjetas</span><b>${fmtMetric(row.predicted_cards)}</b></div>
+                </div>
+                ${renderTeamMarkets((snapshot.secondary_markets || {}).team_markets || {})}
+              </div>
+            </div>
+          </section>
+
+          <section class="premium-section">
+            <div class="premium-heading"><span>Lectura rapida</span><b>En claro</b></div>
+            <div class="why-grid">
+              <div class="why-copy">
+                <p>El snapshot favorecia a ${favorite} con ${pct(confidence)} de confianza.</p>
+                <p>${row.status === "evaluated" ? `El resultado real registrado fue ${row.actual_score || "-"} y el ganador fue ${row.winner_hit ? "acertado" : "fallado"}.` : "La evaluacion sigue pendiente hasta tener resultado final."}</p>
+                <p>${row.predicted_over_2_5_prob >= 0.58 ? "El mercado de goles tenia senal ofensiva." : "El mercado de goles no era el punto mas fuerte del snapshot."}</p>
+              </div>
+              <div class="impact-card-grid">
+                <div class="impact-card"><span>Local</span><b>${pct(row.predicted_home_prob)}</b></div>
+                <div class="impact-card"><span>Empate</span><b>${pct(row.predicted_draw_prob)}</b></div>
+                <div class="impact-card"><span>Visitante</span><b>${pct(row.predicted_away_prob)}</b></div>
+                <div class="impact-card"><span>Calidad datos</span><b>${snapshot.data_quality?.score ? pct(snapshot.data_quality.score) : "Sin medir"}</b></div>
+              </div>
+            </div>
+          </section>
+
+          <details class="advanced-drawer saved-advanced">
+            <summary>Ver analisis avanzado</summary>
+            <div class="saved-advanced-stack">
+              ${renderSavedContext(context)}
+              ${renderPlayerMarkets(snapshot.player_markets || {})}
+              ${renderSnapshotFactors(sim, snapshot.data_quality)}
+              ${renderSavedEvaluation(row)}
+            </div>
+          </details>
+        </section>
       `;
       document.querySelector("#predictionDetail").scrollIntoView({behavior: "smooth", block: "start"});
     }
 
+    function normalizeSavedPrediction(row) {
+      const snapshot = row.snapshot || {};
+      const topScores = row.top_scores || [];
+      return {
+        home_team: row.home_team || "Local",
+        away_team: row.away_team || "Visitante",
+        home_win_prob: Number(row.predicted_home_prob || 0),
+        draw_prob: Number(row.predicted_draw_prob || 0),
+        away_win_prob: Number(row.predicted_away_prob || 0),
+        over_2_5_prob: Number(row.predicted_over_2_5_prob || 0),
+        btts_prob: Number(row.predicted_btts_prob || 0),
+        most_likely_score: topScores[0]?.score || "-",
+        top_score_prob: Number(topScores[0]?.probability || 0),
+        markets: {...(snapshot.secondary_markets || {}), home_team: row.home_team || "Local", away_team: row.away_team || "Visitante"},
+        player_markets: snapshot.player_markets || {},
+      };
+    }
     function renderSavedContext(context) {
       if (!context || !Object.keys(context).length) {
         return `<div class="sensitivity"><h3>Contexto</h3><div class="empty-state">Sin contexto guardado para este partido.</div></div>`;
@@ -1064,16 +1244,16 @@
       });
     }
 
-    async function runPendingReconciliation() {
-      await runDailyAction("Buscando resultados pendientes atrasados...", async () => {
-        const data = await getJson("/api/operations/reconcile-pending-results", {
-          method: "POST",
-          headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({max_dates: 7, sync_api: true}),
+      async function runPendingReconciliation() {
+        await runDailyAction("Buscando resultados pendientes atrasados...", async () => {
+          const data = await getJson("/api/operations/reconcile-pending-results", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({max_dates: 7, sync_api: true, max_fixtures: 100, retry_hours: 6}),
+          });
+          return `Rescate listo. Fixtures: ${data.fixtures_processed || 0}/${data.fixtures_pending_found || 0}. Snapshots actualizados: ${data.snapshots_updated || 0}. Mercados: ${data.markets_updated || 0}. Sin stats: ${data.fixtures_without_stats || 0}. Tiempo: ${data.time_total_seconds || 0}s.`;
         });
-        return `Rescate listo. Actualizados: ${data.results_updated || 0}. Pendientes: ${data.pending_before || 0} -> ${data.pending_after || 0}. Fechas revisadas: ${(data.dates_checked || []).length}.`;
-      });
-    }
+      }
 
     async function runDailyPipeline() {
       const payload = {...dailyPayload(), sync_first: true};
@@ -1165,6 +1345,7 @@
 
     async function loadDataQuality() {
       const data = await getJson("/api/data-quality");
+      window.latestDataQuality = data;
       const groups = Object.values(data.groups);
       const readiness = data.readiness || {};
       const competitions = data.competition_coverage || [];
@@ -1313,53 +1494,75 @@
       `;
     }
 
+    async function loadDatabaseOverview() {
+      databaseOverview = await getJson("/api/data-explorer/overview");
+      renderDatabaseHeader();
+    }
+
     async function loadDataExplorerCompetitions() {
       const data = await getJson("/api/data-explorer/competitions");
-      const competitions = data.competitions || [];
+      databaseCompetitions = data.competitions || [];
       const current = document.querySelector("#explorerCompetition").value;
       document.querySelector("#explorerCompetition").innerHTML = [`<option value="">Todas</option>`].concat(
-        competitions.map(row => `<option value="${escapeAttr(row.competition)}">${row.competition} (${row.rows})</option>`)
+        databaseCompetitions.map(row => `<option value="${escapeAttr(row.competition)}">${row.competition} (${row.rows})</option>`)
       ).join("");
       if (current) document.querySelector("#explorerCompetition").value = current;
+      renderDatabaseHeader();
+      renderCompetitionInventory();
+    }
+
+    function renderDatabaseHeader() {
+      const competitions = databaseCompetitions || [];
       const apiRows = competitions.filter(row => String(row.sources || "").includes("api-football"));
       const completeRows = competitions.filter(row => Number(row.rows || 0) >= 300 && Number(row.finished || 0) > 0);
       const activeRows = competitions.filter(row => Number(row.upcoming || 0) > 0);
       const totalRows = competitions.reduce((sum, row) => sum + Number(row.rows || 0), 0);
-      const dominantSource = apiRows.length >= competitions.length / 2 ? "API-Football" : "Mixta";
-      document.querySelector("#databaseMainSignal").textContent = `${competitions.length} competiciones/temporadas inventariadas`;
-      document.querySelector("#databaseMainCopy").textContent = `${totalRows.toLocaleString()} registros locales. ${activeRows.length} temporadas tienen próximos partidos.`;
+      const totalMatches = Number(databaseOverview.total_matches || totalRows || 0);
+      const dominantSource = apiRows.length >= Math.max(1, competitions.length / 2) ? "API-Football" : "Mixta";
+      document.querySelector("#databaseMainSignal").textContent = `${(databaseOverview.total_competitions || competitions.length).toLocaleString()} competiciones listas para explorar`;
+      document.querySelector("#databaseMainCopy").textContent = `${totalMatches.toLocaleString()} registros locales. ${activeRows.length} temporadas tienen proximos partidos y ${completeRows.length} cobertura fuerte.`;
       document.querySelector("#databaseSourceSignal").textContent = dominantSource;
-      document.querySelector("#databaseCoverageSignal").textContent = `${completeRows.length} coberturas fuertes`;
-      document.querySelector("#databaseInventory").innerHTML = [
-        ["Competiciones", competitions.length],
-        ["Con API-Football", apiRows.length],
-        ["Cobertura fuerte", completeRows.length],
-        ["Con próximos", activeRows.length],
-      ].map(([label, value]) => `
-        <div class="inventory-card">
+      document.querySelector("#databaseCoverageSignal").textContent = `${Number(databaseOverview.league_coverage || apiRows.length).toLocaleString()} ligas con mapa API`;
+      const cards = [
+        ["Competiciones", databaseOverview.total_competitions || competitions.length, "Catalogo local y API", "blue"],
+        ["Partidos", totalMatches, "historicos + fixtures", "green"],
+        ["Equipos", databaseOverview.teams || 0, "identidades guardadas", "teal"],
+        ["Jugadores", databaseOverview.players || 0, "scouting base", "purple"],
+        ["Estadios", databaseOverview.venues || 0, "contexto sede", "amber"],
+        ["Arbitros", databaseOverview.referees || 0, "tarjetas y perfil", "red"],
+        ["Estadisticas", databaseOverview.stored_statistics || 0, "lineups, players, advanced", "indigo"],
+        ["Ultima sync", databaseOverview.last_sync ? String(databaseOverview.last_sync).slice(0, 10) : "-", "API-Football", "gray"],
+      ];
+      document.querySelector("#databaseInventory").innerHTML = cards.map(([label, value, copy, tone]) => `
+        <div class="inventory-card ${tone}">
           <span>${label}</span>
-          <strong>${value}</strong>
+          <strong>${typeof value === "number" ? value.toLocaleString() : value}</strong>
+          <em>${copy}</em>
         </div>
       `).join("");
+    }
+
+    function renderCompetitionInventory() {
+      const competitions = databaseCompetitions || [];
       document.querySelector("#competitionExplorer").innerHTML = competitions.length ? `
         <div class="inventory-board">
-          ${competitions.slice(0, 12).map(row => inventoryRow(row)).join("")}
+          ${competitions.slice(0, 10).map(row => inventoryRow(row)).join("")}
         </div>
-        <div class="sync-note">Mostrando las 12 coberturas principales y las primeras 40 filas del inventario. Usa filtros para profundizar sin cargar toda la base.</div>
+        <div class="sync-note">Regla operativa: si una temporada ya esta descargada con API-Football, primero usa la base local y evita gastar requests.</div>
         <div class="table-wrap compact-table">
           <table>
             <thead><tr><th>Estado</th><th>Competicion</th><th>Temporada</th><th>Registros</th><th>Finalizados</th><th>Proximos</th><th>Rango</th><th>Fuente</th></tr></thead>
             <tbody>
-              ${competitions.slice(0, 40).map(row => `
+              ${competitions.slice(0, 50).map(row => `
                 <tr>
                   <td>${inventoryStatusTag(row)}</td>
-                  <td><b>${row.competition}</b></td>
-                  <td>${row.season}</td>
-                  <td>${row.rows}</td>
-                  <td>${row.finished || 0}</td>
-                  <td>${row.upcoming || 0}</td>
+                  <td><b>${fmt(row.competition)}</b></td>
+                  <td>${fmt(row.season)}</td>
+                  <td>${Number(row.rows || 0).toLocaleString()}</td>
+                  <td>${Number(row.finished || 0).toLocaleString()}</td>
+                  <td>${Number(row.upcoming || 0).toLocaleString()}</td>
                   <td>${fmt(row.first_date)} - ${fmt(row.last_date)}</td>
-                  <td>${row.sources || "-"}</td>
+                  <td>${fmt(row.sources)}</td>
                 </tr>
               `).join("")}
             </tbody>
@@ -1413,10 +1616,26 @@
         const value = document.querySelector(selector).value;
         if (value) params.set(key, value);
       });
-      params.set("limit", "50");
+      params.set("limit", "120");
       const data = await getJson(`/api/data-explorer/fixtures?${params.toString()}`);
-      const totals = data.totals || {};
-      const fixtures = data.fixtures || [];
+      databaseFixtures = data.fixtures || [];
+      databaseOverview.fixture_totals = data.totals || {};
+      renderDataExplorer();
+    }
+
+    function renderDataExplorer() {
+      renderDatabaseTabs();
+      if (databaseTab === "matches") return renderFixtureExplorer();
+      if (databaseTab === "competitions") return renderCompetitionTab();
+      return renderEntityPlaceholder(databaseTab);
+    }
+
+    function renderFixtureExplorer() {
+      const totals = databaseOverview.fixture_totals || {};
+      const provider = document.querySelector("#explorerProvider")?.value || "";
+      let fixtures = provider ? databaseFixtures.filter(row => row.source === provider) : [...databaseFixtures];
+      fixtures.sort((a, b) => sortRows(a, b, databaseSort.key, databaseSort.dir));
+      databaseVisibleFixtures = fixtures;
       const summary = [
         ["Historicos", totals.historical_matches || 0],
         ["API fixtures", totals.api_fixtures || 0],
@@ -1424,24 +1643,36 @@
         ["API finalizados", totals.api_finished || 0],
         ["API proximos", totals.api_upcoming || 0],
       ];
+      document.querySelector("#databaseInsights").innerHTML = databaseInsights(fixtures, totals).map(([label, value, tone]) => `
+        <div class="insight-pill ${tone}"><span>${label}</span><strong>${value}</strong></div>
+      `).join("");
       document.querySelector("#dataExplorerTotals").innerHTML = summary.map(([label, value]) => `
-        <div class="stat"><span>${label}</span><strong>${value}</strong></div>
+        <div><span>${label}</span><strong>${Number(value || 0).toLocaleString()}</strong></div>
       `).join("");
       document.querySelector("#fixtureExplorer").innerHTML = fixtures.length ? `
-        <div class="table-wrap explorer-table">
+        <div class="table-toolbar">
+          <span>${fixtures.length} filas cargadas</span>
+          <div>
+            <button class="secondary" onclick="sortDataExplorer('match_date')">Ordenar fecha</button>
+            <button class="secondary" onclick="sortDataExplorer('competition')">Ordenar liga</button>
+          </div>
+        </div>
+        <div class="table-wrap explorer-table database-table">
           <table>
-            <thead><tr><th>Fecha</th><th>Competicion</th><th>Partido</th><th>Marcador</th><th>Estado</th><th>Sede</th><th>Fuente</th><th>ID API</th></tr></thead>
+            <thead><tr><th>Fecha</th><th>Competicion</th><th>Partido</th><th>Marcador</th><th>Estado</th><th>Cobertura</th><th>Sede</th><th>Fuente</th><th>ID API</th><th>Acciones</th></tr></thead>
             <tbody>
-              ${fixtures.map(row => `
-                <tr>
+              ${fixtures.map((row, index) => `
+                <tr onclick="showFixtureDrawer(${index})">
                   <td>${fmt(row.match_date)}</td>
                   <td>${fmt(row.competition)}</td>
                   <td><b>${fmt(row.home_team)}</b> vs <b>${fmt(row.away_team)}</b></td>
                   <td>${fmt(row.score)}</td>
                   <td><span class="status-tag ${row.status_group}">${fmt(row.status)}</span></td>
+                  <td>${coverageBadge(row)}</td>
                   <td>${fmt(row.venue_name || row.venue_city)}</td>
                   <td>${fmt(row.source)}</td>
                   <td>${fmt(row.api_fixture_id)}</td>
+                  <td><button class="mini-action" onclick="event.stopPropagation(); showFixtureDrawer(${index})">Ver</button></td>
                 </tr>
               `).join("")}
             </tbody>
@@ -1450,9 +1681,217 @@
       ` : `<div class="empty-state">No hay registros con esos filtros.</div>`;
     }
 
+    function renderCompetitionTab() {
+      document.querySelector("#databaseInsights").innerHTML = databaseInsights(databaseFixtures, databaseOverview.fixture_totals || {}).map(([label, value, tone]) => `
+        <div class="insight-pill ${tone}"><span>${label}</span><strong>${value}</strong></div>
+      `).join("");
+      document.querySelector("#dataExplorerTotals").innerHTML = "";
+      document.querySelector("#fixtureExplorer").innerHTML = databaseCompetitions.length ? `
+        <div class="database-entity-grid">
+          ${databaseCompetitions.slice(0, 24).map(row => {
+            const status = inventoryStatus(row);
+            return `
+              <article class="entity-card ${status.key}">
+                <div><span>${status.label}</span><b>${fmt(row.competition)}</b></div>
+                <div class="entity-meta">
+                  <span>Temporada ${fmt(row.season)}</span>
+                  <span>${Number(row.rows || 0).toLocaleString()} registros</span>
+                  <span>${fmt(row.sources)}</span>
+                </div>
+                <em>${status.action}</em>
+              </article>
+            `;
+          }).join("")}
+        </div>
+      ` : `<div class="empty-state">No hay competiciones disponibles.</div>`;
+    }
+
+    function renderEntityPlaceholder(tab) {
+      const map = {
+        teams: ["Equipos", databaseOverview.teams || 0, "escudo, pais, estadio, ranking y forma reciente"],
+        players: ["Jugadores", databaseOverview.players || 0, "scouting, minutos, goles, asistencias, rating y disponibilidad"],
+        venues: ["Estadios", databaseOverview.venues || 0, "ciudad, pais, capacidad, superficie y partidos historicos"],
+        referees: ["Arbitros", databaseOverview.referees || 0, "tarjetas, penales, faltas y perfil disciplinario"],
+        apis: ["APIs", databaseOverview.league_coverage || 0, "cobertura por liga, temporada y endpoint disponible"],
+        stats: ["Estadisticas", databaseOverview.stored_statistics || 0, "lineups, jugadores, avanzadas y contexto"],
+      };
+      const [label, count, copy] = map[tab] || ["Datos", 0, "listo para conectar"];
+      document.querySelector("#databaseInsights").innerHTML = `
+        <div class="insight-pill blue"><span>${label}</span><strong>${Number(count || 0).toLocaleString()}</strong></div>
+        <div class="insight-pill green"><span>Estado</span><strong>Preparado</strong></div>
+        <div class="insight-pill amber"><span>Proxima fase</span><strong>Ficha completa</strong></div>
+      `;
+      document.querySelector("#dataExplorerTotals").innerHTML = "";
+      const coverage = databaseOverview.coverage || [];
+      document.querySelector("#fixtureExplorer").innerHTML = `
+        <div class="entity-feature">
+          <div>
+            <span>${label}</span>
+            <h3>${Number(count || 0).toLocaleString()} registros guardados</h3>
+            <p>${copy}. Esta vista ya esta segmentada para crecer sin saturar el modulo.</p>
+          </div>
+        </div>
+        ${tab === "apis" && coverage.length ? apiCoverageTable(coverage) : ""}
+      `;
+    }
+
+    function renderDatabaseTabs() {
+      document.querySelectorAll("[data-db-tab]").forEach(button => button.classList.toggle("active", button.dataset.dbTab === databaseTab));
+    }
+
+    function setDatabaseTab(tab) {
+      databaseTab = tab;
+      renderDataExplorer();
+    }
+
+    function scheduleDataExplorerSearch() {
+      clearTimeout(databaseSearchTimer);
+      databaseSearchTimer = setTimeout(() => loadDataExplorer(), 320);
+    }
+
+    function toggleAdvancedDatabaseFilters() {
+      document.querySelector("#databaseAdvancedFilters").classList.toggle("open");
+    }
+
+    function setDatabaseQuickFilter(value) {
+      document.querySelectorAll("[data-db-chip]").forEach(button => button.classList.toggle("active", button.dataset.dbChip === value));
+      const today = new Date().toISOString().slice(0, 10);
+      const status = document.querySelector("#explorerStatus");
+      document.querySelector("#explorerFrom").value = "";
+      document.querySelector("#explorerTo").value = "";
+      if (value === "today") {
+        document.querySelector("#explorerFrom").value = today;
+        document.querySelector("#explorerTo").value = today;
+        status.value = "all";
+      } else if (["live", "upcoming", "finished"].includes(value)) {
+        status.value = value;
+      } else {
+        status.value = "all";
+      }
+      loadDataExplorer();
+    }
+
+    function databaseInsights(fixtures, totals) {
+      const finished = fixtures.filter(row => row.status_group === "finished").length;
+      const upcoming = fixtures.filter(row => row.status_group === "upcoming").length;
+      const live = fixtures.filter(row => row.status_group === "live").length;
+      const apiRows = fixtures.filter(row => row.source === "api-football").length;
+      return [
+        ["Filas visibles", fixtures.length.toLocaleString(), "blue"],
+        ["Finalizados", finished.toLocaleString(), "green"],
+        ["Proximos", upcoming.toLocaleString(), "amber"],
+        ["En vivo", live.toLocaleString(), "red"],
+        ["API-Football", apiRows.toLocaleString(), "teal"],
+        ["Competiciones API", Number(totals.api_competitions || 0).toLocaleString(), "gray"],
+      ];
+    }
+
+    function coverageBadge(row) {
+      if (row.source === "api-football" && row.api_fixture_id) return `<span class="status-tag ready">Fuerte</span>`;
+      if (row.source === "api-football") return `<span class="status-tag mixed">Media</span>`;
+      return `<span class="status-tag inactive">Base</span>`;
+    }
+
+    function sortDataExplorer(key) {
+      databaseSort = {
+        key,
+        dir: databaseSort.key === key && databaseSort.dir === "asc" ? "desc" : "asc",
+      };
+      renderDataExplorer();
+    }
+
+    function sortRows(a, b, key, dir) {
+      const av = String(a[key] || "");
+      const bv = String(b[key] || "");
+      const result = av.localeCompare(bv, undefined, {numeric: true, sensitivity: "base"});
+      return dir === "asc" ? result : -result;
+    }
+
+    function exportDatabaseCsv() {
+      const rows = databaseFixtures || [];
+      if (!rows.length) return;
+      const headers = ["match_date", "competition", "season", "home_team", "away_team", "score", "status", "venue_name", "source", "api_fixture_id"];
+      const csv = [headers.join(",")].concat(rows.map(row => headers.map(key => `"${String(row[key] ?? "").replaceAll('"', '""')}"`).join(","))).join("\n");
+      const blob = new Blob([csv], {type: "text/csv;charset=utf-8"});
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `football-data-explorer-${new Date().toISOString().slice(0, 10)}.csv`;
+      link.click();
+      URL.revokeObjectURL(link.href);
+    }
+
+    function showFixtureDrawer(index) {
+      const row = databaseVisibleFixtures[index];
+      if (!row) return;
+      document.querySelector("#dataDetailDrawer").innerHTML = `
+        <div class="drawer-card">
+          <button class="drawer-close" onclick="closeDataDrawer()">Cerrar</button>
+          <span>${fmt(row.competition)} - ${fmt(row.season)}</span>
+          <h3>${fmt(row.home_team)} vs ${fmt(row.away_team)}</h3>
+          <div class="drawer-score">${fmt(row.score)}</div>
+          <div class="drawer-grid">
+            <div><span>Fecha</span><b>${fmt(row.match_date)}</b></div>
+            <div><span>Estado</span><b>${fmt(row.status)}</b></div>
+            <div><span>Fuente</span><b>${fmt(row.source)}</b></div>
+            <div><span>ID API</span><b>${fmt(row.api_fixture_id)}</b></div>
+            <div><span>Sede</span><b>${fmt(row.venue_name || row.venue_city)}</b></div>
+            <div><span>Cobertura</span><b>${row.source === "api-football" ? "API conectada" : "Historica"}</b></div>
+          </div>
+          <div class="drawer-actions">
+            <button onclick="copyFixtureId('${escapeAttr(row.api_fixture_id || row.id || "")}')">Copiar ID</button>
+            <button class="secondary" onclick="copyFixtureJson(${index})">Copiar JSON</button>
+          </div>
+        </div>
+      `;
+      document.querySelector("#dataDetailDrawer").classList.add("open");
+    }
+
+    function closeDataDrawer() {
+      document.querySelector("#dataDetailDrawer").classList.remove("open");
+    }
+
+    async function copyFixtureId(value) {
+      if (!value) return;
+      await navigator.clipboard.writeText(String(value));
+    }
+
+    async function copyFixtureJson(index) {
+      const row = databaseVisibleFixtures[index];
+      if (!row) return;
+      await navigator.clipboard.writeText(JSON.stringify(row, null, 2));
+    }
+
+    function apiCoverageTable(rows) {
+      return `
+        <div class="table-wrap compact-table database-table">
+          <table>
+            <thead><tr><th>Liga</th><th>Pais</th><th>Temporada</th><th>Eventos</th><th>Lineups</th><th>Stats fixture</th><th>Stats jugador</th><th>Odds</th></tr></thead>
+            <tbody>
+              ${rows.slice(0, 50).map(row => `
+                <tr>
+                  <td><b>${fmt(row.league_name)}</b></td>
+                  <td>${fmt(row.country)}</td>
+                  <td>${fmt(row.season)}</td>
+                  <td>${yesNo(row.fixtures_events)}</td>
+                  <td>${yesNo(row.fixtures_lineups)}</td>
+                  <td>${yesNo(row.fixtures_statistics_fixtures)}</td>
+                  <td>${yesNo(row.fixtures_statistics_players)}</td>
+                  <td>${yesNo(row.odds)}</td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    function yesNo(value) {
+      return Number(value || 0) ? `<span class="status-tag ready">Si</span>` : `<span class="status-tag inactive">No</span>`;
+    }
+
     async function runPrediction() {
       updateMatchTitle();
-      setLoading("#predictionPanel", "Calculando favorito, mercados y jugadores...");
+      setLoading("#predictionPanel", "Calculando mejores picks y mercados...");
       document.querySelector("#quickStatus").textContent = "Calculando";
       const payload = {
         home_team: document.querySelector("#homeTeam").value,
@@ -1489,6 +1928,7 @@
         </div>
         ${renderPlayerMarkets(data.player_markets || {})}
       `;
+      document.querySelector("#predictionPanel").innerHTML = renderPredictionDesk(data, null);
       loadSummary();
     }
 
@@ -1512,6 +1952,603 @@
           ? `Lean fuerte: ${top.label}`
           : `Lean prudente: ${top.label}`;
       return {...top, confidence, margin, recommendation};
+    }
+
+    function renderPredictionDesk(data, simulationData) {
+      const normalized = normalizePredictionData(data);
+      const decision = decisionSummary(normalized);
+      const quality = window.latestDataQuality || {};
+      const picks = recommendedPicks(normalized, simulationData);
+      return `
+        <section class="match-summary-card">
+          <div class="match-summary-main">
+            <div>
+              <span>Resumen del partido</span>
+              <h3>${normalized.home_team} vs ${normalized.away_team}</h3>
+            <p>${normalized.competition || "Partido seleccionado"} · ${normalized.date || "Fecha no asignada"} · ${normalized.time || "Hora no asignada"}</p>
+            </div>
+            <div>
+              <strong>${winnerLabel(normalized)}</strong>
+              <b>${decision.recommendation}</b>
+            </div>
+          </div>
+          <div class="summary-kpis">
+            <div><span>Estado</span><b>${normalized.status || "Prediccion lista"}</b></div>
+            <div><span>Confianza</span><b>${decision.confidence}</b></div>
+            <div><span>Datos</span><b>${quality.score ? pct(quality.score) : "Sin medir"}</b></div>
+          </div>
+        </section>
+
+        <section class="premium-section picks-section">
+          <div class="premium-heading">
+            <span>Picks recomendados</span>
+            <b>${picks.length ? "Ordenados por confianza" : "Sin picks fuertes"}</b>
+          </div>
+          <div class="pick-card-grid">
+            ${picks.length ? picks.slice(0, 6).map(renderPickCard).join("") : `<div class="empty-state">No hay apuesta con confianza suficiente. Mejor esperar mejor cuota o mas datos.</div>`}
+          </div>
+        </section>
+
+        <section class="premium-section">
+          <div class="premium-heading"><span>Probabilidades</span><b>${decision.recommendation}</b></div>
+          <div class="probability-board">
+            ${probabilityBar(`Gana ${normalized.home_team}`, normalized.home_win_prob)}
+            ${probabilityBar("Empate", normalized.draw_prob)}
+            ${probabilityBar(`Gana ${normalized.away_team}`, normalized.away_win_prob)}
+          </div>
+        </section>
+
+        <section class="premium-section">
+          <div class="premium-heading"><span>Mercados principales</span><b>Lectura rapida</b></div>
+          <div class="market-category-grid main-markets">
+            ${marketCard("Ganador", winnerLabel(normalized), decision.probability)}
+            ${marketCard("Doble oportunidad", doubleChanceLabel(normalized), doubleChanceProb(normalized))}
+            ${marketCard("Ambos equipos anotan", normalized.btts_prob >= 0.5 ? "Si" : "No", Math.max(normalized.btts_prob, 1 - normalized.btts_prob))}
+            ${marketCard("Mas de 2.5 goles", normalized.over_2_5_prob >= 0.5 ? "Si" : "No", Math.max(normalized.over_2_5_prob, 1 - normalized.over_2_5_prob))}
+            ${marketCard("Resultado exacto", normalized.most_likely_score || "Sin dato", normalized.top_score_prob)}
+            ${marketCard("Primer gol", "Requiere simulacion", null, "Corre simulacion para calcularlo", "pending")}
+            ${marketCard("Porteria a cero", "Requiere simulacion", null, "Corre simulacion para calcularlo", "pending")}
+          </div>
+        </section>
+
+        ${renderTeamCornersDesk(normalized.markets)}
+        ${renderTeamShotsDesk(normalized.markets)}
+        ${renderSecondaryMarketDesk(normalized.markets)}
+        ${renderPlayerMarketsPremium(normalized.player_markets)}
+        ${renderPlayerShotsExpected(normalized.player_markets)}
+        ${renderModelWhy(normalized, simulationData)}
+      `;
+    }
+
+    function normalizePredictionData(data) {
+      const sim = data.simulation || {};
+      const home = document.querySelector("#homeTeam")?.value || data.home_team || "Local";
+      const away = document.querySelector("#awayTeam")?.value || data.away_team || "Visitante";
+      const topScores = data.top_scores || [];
+      return {
+        home_team: home,
+        away_team: away,
+        competition: data.competition || data.match_context?.league_name || "",
+        date: data.date || new Date().toISOString().slice(0, 10),
+        time: data.time || "",
+        status: data.id ? `Guardada #${data.id}` : "Sin guardar",
+        home_win_prob: Number(data.home_win_prob ?? sim.home_win ?? 0),
+        draw_prob: Number(data.draw_prob ?? sim.draw ?? 0),
+        away_win_prob: Number(data.away_win_prob ?? sim.away_win ?? 0),
+        over_2_5_prob: Number(data.over_2_5_prob ?? sim.over_2_5 ?? 0),
+        btts_prob: Number(data.both_teams_score_prob ?? sim.both_teams_score ?? 0),
+        most_likely_score: data.most_likely_score || topScores[0]?.score || "-",
+        top_score_prob: Number(topScores[0]?.probability || 0),
+        top_scores: topScores,
+        markets: {...(data.secondary_markets || {}), home_team: home, away_team: away},
+        player_markets: data.player_markets || {},
+      };
+    }
+
+    function recommendedPicks(data, simulationData) {
+      const picks = [];
+      const add = (market, pick, probability, risk = "medio") => {
+        if (probability == null || Number.isNaN(Number(probability))) return;
+        const p = Number(probability);
+        if (p < 0.56) return;
+        picks.push({market, pick, probability: p, confidence: confidenceFromProbability(p), risk});
+      };
+      const winner = [
+        [`Gana ${data.home_team}`, data.home_win_prob],
+        ["Empate", data.draw_prob],
+        [`Gana ${data.away_team}`, data.away_win_prob],
+      ].sort((a, b) => b[1] - a[1])[0];
+      add("Ganador", winner[0], winner[1], "medio");
+      add("Doble oportunidad", doubleChanceLabel(data), doubleChanceProb(data), "bajo");
+      add("Goles", data.over_2_5_prob >= 0.5 ? "Mas de 2.5" : "Menos de 2.5", Math.max(data.over_2_5_prob, 1 - data.over_2_5_prob), "medio");
+      add("Ambos equipos anotan", data.btts_prob >= 0.5 ? "Si" : "No", Math.max(data.btts_prob, 1 - data.btts_prob), "medio");
+      const m = data.markets || {};
+      add("Corners", "Mas de 8.5", m.over_8_5_corners_prob, "medio");
+      add("Tarjetas", "Mas de 3.5", m.over_3_5_cards_prob, "alto");
+      for (const side of ["home", "away"]) {
+        const team = (m.team_markets || {})[side] || {};
+        add(`Corners ${team.team || ""}`, "Mas de 3.5", team.over_3_5_corners_prob, "medio");
+        add(`Tiros puerta ${team.team || ""}`, "Mas de 3.5", team.over_3_5_shots_on_target_prob, "medio");
+      }
+      const players = data.player_markets || {};
+      (players.top_scorers || []).slice(0, 3).forEach(player => add("Jugador marca gol", player.player_name, player.score_prob, "alto"));
+      (players.top_shots_on_target || []).slice(0, 3).forEach(player => add("Jugador tiro a puerta", player.player_name, player.shot_on_target_prob, "medio"));
+      return picks.sort((a, b) => b.probability - a.probability);
+    }
+
+    function renderPickCard(pick, index) {
+      const tone = probabilityTone(pick.probability);
+      const label = pick.probability >= 0.8 ? "Pick muy fuerte" : pick.probability >= 0.65 ? "Pick" : "Pick prudente";
+      return `
+        <article class="pick-card ${tone}">
+          <div class="pick-rank">${index + 1}</div>
+          <div>
+            <span>${label}</span>
+            <h3>${pick.pick}</h3>
+            <p>${pick.market}</p>
+          </div>
+          <div class="pick-metrics">
+            <b>${pct(pick.probability)}</b>
+            <em>${stars(pick.probability)}</em>
+            <small>Riesgo ${pick.risk}</small>
+          </div>
+        </article>
+      `;
+    }
+
+    function renderMonteCarloDecisionDesk(snapshot) {
+      const report = snapshot.pick_report || {};
+      const distribution = snapshot.market_distribution || {};
+      if (!Object.keys(report).length && !Object.keys(distribution).length) return "";
+      const discarded = report.discarded || [];
+      const noBet = report.no_bet || [];
+      return `
+        <section class="premium-section mc-decision-desk">
+          <div class="premium-heading">
+            <span>Monte Carlo mercados</span>
+            <b>${report.summary?.method || distribution.method || "distribucion"}</b>
+          </div>
+          ${renderDistributionLines(distribution)}
+          <div class="mc-decision-grid">
+            <div class="mc-panel">
+              <h3>No bet</h3>
+              ${noBet.length ? noBet.map(renderNoBetRow).join("") : `<div class="empty-state">No hay mercados bloqueados por Monte Carlo.</div>`}
+            </div>
+            <div class="mc-panel">
+              <h3>Descartados</h3>
+              ${discarded.length ? discarded.slice(0, 8).map(renderDiscardedPickRow).join("") : `<div class="empty-state">Sin descartes relevantes.</div>`}
+            </div>
+          </div>
+        </section>
+      `;
+    }
+
+    function renderDistributionLines(distribution) {
+      const cards = [
+        ["Goles", distribution.goals],
+        ["Corners", distribution.corners],
+        ["Tarjetas", distribution.cards],
+        ["Tiros puerta", distribution.shots_on_target],
+      ].filter(([, summary]) => summary && summary.lines);
+      if (!cards.length) return "";
+      return `
+        <div class="mc-line-grid">
+          ${cards.map(([label, summary]) => `
+            <div class="mc-line-card">
+              <div><span>${label}</span><b>${fmtMetric(summary.expected)}</b><em>std ${fmtMetric(summary.std)} · ${summary.stability || "sin estabilidad"}</em></div>
+              <div class="mc-lines">
+                ${Object.entries(summary.lines).slice(0, 6).map(([line, value]) => `
+                  <div><span>+${line.replace("_", ".")}</span><strong>${pct(value.over)}</strong></div>
+                `).join("")}
+              </div>
+            </div>
+          `).join("")}
+        </div>
+      `;
+    }
+
+    function renderNoBetRow(row) {
+      return `
+        <div class="no-bet-row">
+          <div><b>${row.market}</b><span>${row.best_candidate || "Sin candidato"}</span></div>
+          <strong>${pct(row.probability)}</strong>
+          <em>${reasonLabels(row.reasons).join(" · ") || "riesgo operativo"}</em>
+        </div>
+      `;
+    }
+
+    function renderDiscardedPickRow(pick) {
+      return `
+        <div class="discard-row">
+          <div><b>${pick.market}</b><span>${pick.pick}</span></div>
+          <strong>${pct(pick.probability)}</strong>
+          <em>${reasonLabels(pick.discard_reasons).join(" · ") || "menor prioridad"}</em>
+        </div>
+      `;
+    }
+
+    function reasonLabels(reasons) {
+      const labels = {
+        linea_del_lado_equivocado: "linea del lado equivocado",
+        linea_demasiado_pegada: "linea pegada",
+        probabilidad_baja: "probabilidad baja",
+        mercado_inestable: "mercado inestable",
+      };
+      return (reasons || []).map(reason => labels[reason] || reason);
+    }
+
+    function probabilityBar(label, value) {
+      const tone = probabilityTone(value);
+      return `
+        <div class="probability-row ${tone}">
+          <div><b>${label}</b><span>${pct(value)}</span></div>
+          <div class="probability-track"><i style="width:${Math.max(2, Math.min(100, Number(value || 0) * 100))}%"></i></div>
+        </div>
+      `;
+    }
+
+    function renderSecondaryMarketDesk(markets) {
+      const team = markets.team_markets || {};
+      const home = team.home || {};
+      const away = team.away || {};
+      const goals = [
+        ["Mas de 0.5", null], ["Mas de 1.5", null], ["Mas de 2.5", null], ["Mas de 3.5", null],
+        ["Menos de 2.5", null], ["Menos de 3.5", null],
+      ];
+      return `
+        <section class="premium-section">
+          <div class="premium-heading"><span>Mercados secundarios</span><b>Por categoria</b></div>
+          <div class="market-category-grid">
+            ${marketCategory("Goles", goals.map(([label, prob]) => marketMini(label, prob, "Requiere simulacion")))}
+            ${marketCategory("Corners", [
+              marketMini("Total esperado", markets.total_corners_expected, "valor"),
+              marketMini("Mas de 8.5", markets.over_8_5_corners_prob),
+              marketMini("Local", home.corners_expected, "valor"),
+              marketMini("Visitante", away.corners_expected, "valor"),
+              marketMini(`${home.team || "Local"} mas de 3.5`, home.over_3_5_corners_prob),
+              marketMini(`${away.team || "Visitante"} mas de 3.5`, away.over_3_5_corners_prob),
+            ])}
+            ${marketCategory("Tiros", [
+              marketMini("Tiros totales", markets.total_shots_expected, "valor"),
+              marketMini("Tiros puerta", markets.shots_on_target_expected, "valor"),
+              marketMini(`${home.team || "Local"} tiros puerta`, home.shots_on_target_expected, "valor"),
+              marketMini(`${away.team || "Visitante"} tiros puerta`, away.shots_on_target_expected, "valor"),
+              marketMini(`${home.team || "Local"} mas de 3.5 TA`, home.over_3_5_shots_on_target_prob),
+              marketMini(`${away.team || "Visitante"} mas de 3.5 TA`, away.over_3_5_shots_on_target_prob),
+            ])}
+            ${marketCategory("Tarjetas", [
+              marketMini("Total esperado", markets.total_cards_expected, "valor"),
+              marketMini("Mas de 3.5", markets.over_3_5_cards_prob),
+              marketMini("Local", null, "Requiere stats por equipo"),
+              marketMini("Visitante", null, "Requiere stats por equipo"),
+              marketMini("Menos de 4.5", markets.over_3_5_cards_prob == null ? null : 1 - Number(markets.over_3_5_cards_prob)),
+            ])}
+            ${marketCategory("Goles por equipo", [
+              marketMini(`${home.team || "Local"} +0.5`, null, "Requiere simulacion"),
+              marketMini(`${home.team || "Local"} +1.5`, null, "Requiere simulacion"),
+              marketMini(`${away.team || "Visitante"} +0.5`, null, "Requiere simulacion"),
+              marketMini(`${away.team || "Visitante"} +1.5`, null, "Requiere simulacion"),
+            ])}
+          </div>
+        </section>
+      `;
+    }
+
+    function renderTeamCornersDesk(markets) {
+      const {home, away} = normalizedTeamMarketData(markets);
+      if (!Object.keys(home).length && !Object.keys(away).length) return "";
+      const row = item => `
+        <div class="team-shot-card corner-card">
+          <div>
+            <span>${item.team || "-"}</span>
+            <b>${num(item.corners_expected || 0)}</b>
+            <em>${projectionLabel("corners", item.corners_expected)}</em>
+          </div>
+          <div>
+            <small>Rango probable</small>
+            <strong>${item.corners_range?.label || "-"}</strong>
+          </div>
+          <div>
+            <small>Over 3.5</small>
+            <strong>${pct(item.over_3_5_corners_prob || 0)}</strong>
+          </div>
+          <div>
+            <small>Over 4.5</small>
+            <strong>${pct(item.over_4_5_corners_prob || 0)}</strong>
+          </div>
+        </div>
+      `;
+      return `
+        <section class="premium-section">
+          <div class="premium-heading"><span>Corners esperados por equipo</span><b>Presion ofensiva</b></div>
+          <div class="team-shot-grid">
+            ${Object.keys(home).length ? row(home) : ""}
+            ${Object.keys(away).length ? row(away) : ""}
+          </div>
+        </section>
+      `;
+    }
+
+    function renderTeamShotsDesk(markets) {
+      const {home, away} = normalizedTeamMarketData(markets);
+      if (!Object.keys(home).length && !Object.keys(away).length) return "";
+      const row = item => `
+        <div class="team-shot-card">
+          <div>
+            <span>${item.team || "-"}</span>
+            <b>${num(item.shots_on_target_expected || 0)}</b>
+            <em>${projectionLabel("shots_on_target", item.shots_on_target_expected)}</em>
+          </div>
+          <div>
+            <small>Rango probable</small>
+            <strong>${item.shots_on_target_range?.label || "-"}</strong>
+          </div>
+          <div>
+            <small>Over 3.5</small>
+            <strong>${pct(item.over_3_5_shots_on_target_prob || 0)}</strong>
+          </div>
+          <div>
+            <small>Over 4.5</small>
+            <strong>${pct(item.over_4_5_shots_on_target_prob || 0)}</strong>
+          </div>
+        </div>
+      `;
+      return `
+        <section class="premium-section">
+          <div class="premium-heading"><span>Tiros a puerta esperados por equipo</span><b>Volumen ofensivo</b></div>
+          <div class="team-shot-grid">
+            ${Object.keys(home).length ? row(home) : ""}
+            ${Object.keys(away).length ? row(away) : ""}
+          </div>
+        </section>
+      `;
+    }
+
+    function normalizedTeamMarketData(markets) {
+      const source = markets || {};
+      const team = source.team_markets || {};
+      const home = {...(team.home || {})};
+      const away = {...(team.away || {})};
+      const hasTeamMarkets = Object.keys(home).length || Object.keys(away).length;
+      if (hasTeamMarkets) return {home, away};
+
+      const homeCorners = source.home_corners_expected;
+      const awayCorners = source.away_corners_expected;
+      const homeSot = source.home_shots_on_target_expected;
+      const awaySot = source.away_shots_on_target_expected;
+      const totalCorners = source.total_corners_expected;
+      const totalSot = source.shots_on_target_expected;
+      const fallbackHomeCorners = homeCorners ?? (totalCorners == null ? null : Number(totalCorners) * 0.5);
+      const fallbackAwayCorners = awayCorners ?? (totalCorners == null ? null : Number(totalCorners) * 0.5);
+      const fallbackHomeSot = homeSot ?? (totalSot == null ? null : Number(totalSot) * 0.55);
+      const fallbackAwaySot = awaySot ?? (totalSot == null ? null : Number(totalSot) * 0.45);
+
+      const build = (side, corners, sot) => {
+        if (corners == null && sot == null) return {};
+        return {
+          team: side === "home" ? (source.home_team || document.querySelector("#homeTeam")?.value || "Local") : (source.away_team || document.querySelector("#awayTeam")?.value || "Visitante"),
+          corners_expected: corners == null ? null : Number(corners),
+          corners_range: likelyMetricRange(corners),
+          over_3_5_corners_prob: corners == null ? null : poissonOverThreshold(Number(corners), 3.5),
+          over_4_5_corners_prob: corners == null ? null : poissonOverThreshold(Number(corners), 4.5),
+          shots_on_target_expected: sot == null ? null : Number(sot),
+          shots_on_target_range: likelyMetricRange(sot),
+          over_3_5_shots_on_target_prob: sot == null ? null : poissonOverThreshold(Number(sot), 3.5),
+          over_4_5_shots_on_target_prob: sot == null ? null : poissonOverThreshold(Number(sot), 4.5),
+        };
+      };
+
+      return {
+        home: build("home", fallbackHomeCorners, fallbackHomeSot),
+        away: build("away", fallbackAwayCorners, fallbackAwaySot),
+      };
+    }
+
+    function likelyMetricRange(value) {
+      if (value == null || !Number.isFinite(Number(value))) return {label: "-"};
+      const v = Number(value);
+      const low = Math.max(0, Math.floor(v - Math.sqrt(Math.max(v, 1))));
+      const high = Math.max(low + 1, Math.ceil(v + Math.sqrt(Math.max(v, 1))));
+      return {label: `${low}-${high}`};
+    }
+
+    function poissonOverThreshold(lambda, threshold) {
+      const lam = Math.max(Number(lambda || 0), 0);
+      const maxK = Math.floor(Number(threshold || 0));
+      let cumulative = 0;
+      let term = Math.exp(-lam);
+      cumulative += term;
+      for (let k = 1; k <= maxK; k += 1) {
+        term *= lam / k;
+        cumulative += term;
+      }
+      return Math.max(0, Math.min(0.99, 1 - cumulative));
+    }
+
+    function marketCategory(title, rows) {
+      return `<div class="market-category"><h3>${title}</h3>${rows.join("")}</div>`;
+    }
+
+    function marketMini(label, value, mode = "prob") {
+      const isProb = mode === "prob";
+      const missing = value == null || value === "";
+      const tone = missing ? "muted" : isProb ? probabilityTone(Number(value)) : "value";
+      return `
+        <div class="market-mini ${tone}">
+          <span>${label}</span>
+          <b>${missing ? mode : isProb ? pct(value) : num(value)}</b>
+        </div>
+      `;
+    }
+
+    function marketCard(title, pick, probability, detail = null, variant = "") {
+      const tone = probability == null ? (variant || "muted") : probabilityTone(probability);
+      const subtext = detail || (probability == null ? "Sin dato suficiente" : pct(probability));
+      return `
+        <div class="main-market-card ${tone}">
+          <span>${title}</span>
+          <b>${pick}</b>
+          <em>${subtext}</em>
+        </div>
+      `;
+    }
+
+    function projectionLabel(type, value) {
+      if (value == null || value === "") return "No calculado";
+      const n = Number(value);
+      if (!Number.isFinite(n)) return "Total proyectado";
+      if (type === "corners") {
+        if (n >= 10) return "Ritmo alto de corners";
+        if (n >= 8) return "Total proyectado";
+        return "Ritmo bajo de corners";
+      }
+      if (type === "shots_on_target") {
+        if (n >= 9) return "Volumen alto";
+        if (n >= 5.5) return "Volumen medio";
+        return "Volumen bajo";
+      }
+      if (type === "cards") {
+        if (n >= 5) return "Partido caliente";
+        if (n >= 3) return "Riesgo medio";
+        return "Partido limpio esperado";
+      }
+      return "Total proyectado";
+    }
+
+    function renderPlayerMarketsPremium(playerMarkets) {
+      if (!playerMarkets || !Object.keys(playerMarkets).length) return "";
+      const players = [
+        ...(playerMarkets.top_scorers || []).map(player => ({...player, market: "Marca gol", probability: player.score_prob})),
+        ...(playerMarkets.top_shots_on_target || []).map(player => ({...player, market: "Tiro a puerta", probability: player.shot_on_target_prob})),
+      ].sort((a, b) => Number(b.probability || 0) - Number(a.probability || 0)).slice(0, 10);
+      return `
+        <section class="premium-section">
+          <div class="premium-heading"><span>Mercados de jugadores</span><b>${players.length} opciones</b></div>
+          <div class="player-premium-list">
+            ${players.length ? players.map(player => `
+              <div class="player-premium-row ${probabilityTone(player.probability)}">
+                <div><b>${player.player_name}</b><span>${player.team} · ${player.position || "-"}</span></div>
+                <div><em>${player.market}</em><strong>${pct(player.probability)}</strong></div>
+                <div><em>xTA</em><strong>${player.expected_shots_on_target == null ? "-" : num(player.expected_shots_on_target)}</strong></div>
+                <div><em>Confianza</em><strong>${player.confidence || "-"}</strong></div>
+              </div>
+            `).join("") : `<div class="empty-state">Sin datos suficientes de jugadores.</div>`}
+          </div>
+        </section>
+      `;
+    }
+
+    function renderPlayerShotsExpected(playerMarkets) {
+      if (!playerMarkets || !Object.keys(playerMarkets).length) return "";
+      const players = (playerMarkets.top_shots_on_target || [])
+        .filter(player => player.expected_shots_on_target != null)
+        .sort((a, b) => Number(b.expected_shots_on_target || 0) - Number(a.expected_shots_on_target || 0))
+        .slice(0, 8);
+      if (!players.length) return "";
+      const teamSummary = [playerMarkets.home_team, playerMarkets.away_team].filter(Boolean);
+      return `
+        <section class="premium-section">
+          <div class="premium-heading"><span>Tiros a puerta esperados por jugador</span><b>Ranking individual</b></div>
+          <div class="player-shot-summary">
+            ${teamSummary.map(team => `
+              <div>
+                <span>${team.team || "-"}</span>
+                <b>${num(team.expected_shots_on_target || 0)}</b>
+                <em>${team.coverage || "sin cobertura"}</em>
+              </div>
+            `).join("")}
+          </div>
+          <div class="player-shot-list">
+            ${players.map(player => `
+              <div class="player-shot-row">
+                <div>
+                  <b>${player.player_name}</b>
+                  <span>${player.team} / ${player.position || "-"} / confianza ${player.confidence || "-"}</span>
+                </div>
+                <div><em>xTA</em><strong>${num(player.expected_shots_on_target || 0)}</strong></div>
+                <div><em>1+ TA</em><strong>${pct(player.shot_on_target_prob || 0)}</strong></div>
+                <div><em>Min</em><strong>${player.minutes || 0}</strong></div>
+              </div>
+            `).join("")}
+          </div>
+        </section>
+      `;
+    }
+
+    function renderModelWhy(data, simulationData) {
+      const decision = decisionSummary(data);
+      const factors = simulationData?.factor_cards || [];
+      const reasons = [
+        decision.side === "draw" ? "El partido aparece cerrado en el mercado principal." : `El modelo favorece a ${decision.label}.`,
+        data.over_2_5_prob >= 0.58 ? "El partido tiene buena senal de goles." : "El ritmo de goles no aparece como pick dominante.",
+        data.btts_prob >= 0.58 ? "Ambos equipos tienen probabilidad razonable de anotar." : "Ambos anotan no destaca como apuesta principal.",
+      ];
+      return `
+        <section class="premium-section">
+          <div class="premium-heading"><span>Por que el modelo piensa eso</span><b>Lectura en claro</b></div>
+          <div class="why-grid">
+            <div class="why-copy">${reasons.map(reason => `<p>${reason}</p>`).join("")}</div>
+            <div class="impact-card-grid">
+              ${factors.length ? factors.slice(0, 6).map(factor => `
+                <div class="impact-card">
+                  <span>${factor.name}</span>
+                  <b>${factor.edge > 0 ? "+" : ""}${num(factor.edge)}</b>
+                  <p>${factor.edge >= 0 ? "Favorece al local en esta lectura." : "Favorece al visitante en esta lectura."}</p>
+                </div>
+              `).join("") : `<div class="empty-state">Corre una simulacion para ver factores explicados.</div>`}
+            </div>
+          </div>
+        </section>
+      `;
+    }
+
+    function probabilityTone(value) {
+      const p = Number(value || 0);
+      if (p >= 0.95) return "elite";
+      if (p >= 0.8) return "strong";
+      if (p >= 0.65) return "good";
+      if (p >= 0.5) return "watch";
+      return "avoid";
+    }
+
+    function confidenceFromProbability(value) {
+      const p = Number(value || 0);
+      if (p >= 0.8) return "muy alta";
+      if (p >= 0.65) return "alta";
+      if (p >= 0.56) return "media";
+      return "baja";
+    }
+
+    function stars(value) {
+      const p = Number(value || 0);
+      const full = p >= 0.8 ? 5 : p >= 0.65 ? 4 : p >= 0.56 ? 3 : p >= 0.5 ? 2 : 1;
+      return "★★★★★".slice(0, full) + "☆☆☆☆☆".slice(0, 5 - full);
+    }
+
+    function winnerLabel(data) {
+      const rows = [
+        [`Gana ${data.home_team}`, data.home_win_prob],
+        ["Empate", data.draw_prob],
+        [`Gana ${data.away_team}`, data.away_win_prob],
+      ].sort((a, b) => b[1] - a[1]);
+      return rows[0][0];
+    }
+
+    function doubleChanceLabel(data) {
+      const options = [
+        {label: `${data.home_team} o empate`, p: Number(data.home_win_prob || 0) + Number(data.draw_prob || 0)},
+        {label: `${data.away_team} o empate`, p: Number(data.away_win_prob || 0) + Number(data.draw_prob || 0)},
+        {label: `${data.home_team} o ${data.away_team}`, p: Number(data.home_win_prob || 0) + Number(data.away_win_prob || 0)},
+      ].sort((a, b) => b.p - a.p);
+      return options[0].label;
+    }
+
+    function doubleChanceProb(data) {
+      return Math.max(
+        Number(data.home_win_prob || 0) + Number(data.draw_prob || 0),
+        Number(data.away_win_prob || 0) + Number(data.draw_prob || 0),
+        Number(data.home_win_prob || 0) + Number(data.away_win_prob || 0),
+      );
     }
 
     async function saveSnapshot() {
@@ -1615,6 +2652,7 @@
         ${renderMarkets(data.secondary_markets || {})}
         ${renderPlayerMarkets(data.player_markets || {})}
       `;
+      document.querySelector("#predictionPanel").innerHTML = renderPredictionDesk(data, data);
     }
 
     function renderContext(context) {
@@ -1630,22 +2668,45 @@
       `;
     }
 
-    function renderMarkets(markets) {
-      if (!Object.keys(markets).length) return "";
-      return `
-        <div class="sensitivity">
-          <h3>Mercados secundarios</h3>
-          <div class="odds-grid">
-            ${marketTile("Corners", num(markets.total_corners_expected))}
+     function renderMarkets(markets) {
+       if (!Object.keys(markets).length) return "";
+       const teamMarkets = markets.team_markets || {};
+       return `
+         <div class="sensitivity">
+           <h3>Mercados secundarios</h3>
+           <div class="odds-grid">
+             ${marketTile("Corners", num(markets.total_corners_expected))}
             ${oddsTile("Over 8.5 corners", markets.over_8_5_corners_prob)}
             ${marketTile("Tarjetas", num(markets.total_cards_expected))}
             ${oddsTile("Over 3.5 tarjetas", markets.over_3_5_cards_prob)}
-            ${marketTile("Tiros a puerta", num(markets.shots_on_target_expected))}
-          </div>
-          ${markets.calibration?.applied ? `<div class="calibration-note">Calibracion aplicada sobre sesgos reales.</div>` : ""}
-        </div>
-      `;
-    }
+             ${marketTile("Tiros a puerta", num(markets.shots_on_target_expected))}
+           </div>
+           ${renderTeamMarkets(teamMarkets)}
+           ${markets.calibration?.applied ? `<div class="calibration-note">Calibracion aplicada sobre sesgos reales.</div>` : ""}
+         </div>
+       `;
+     }
+
+     function renderTeamMarkets(teamMarkets) {
+       const home = teamMarkets.home || {};
+       const away = teamMarkets.away || {};
+       if (!Object.keys(home).length && !Object.keys(away).length) return "";
+       const row = team => `
+         <div class="team-market-row">
+           <div><b>${team.team || "-"}</b><span>Confianza ${team.confidence || "-"}</span></div>
+           <div><em>Corners</em><strong>${num(team.corners_expected || 0)}</strong><span>Rango ${team.corners_range?.label || "-"}</span></div>
+           <div><em>Over 3.5 corners</em><strong>${pct(team.over_3_5_corners_prob || 0)}</strong></div>
+           <div><em>Tiros puerta</em><strong>${num(team.shots_on_target_expected || 0)}</strong><span>Rango ${team.shots_on_target_range?.label || "-"}</span></div>
+           <div><em>Over 3.5 TA</em><strong>${pct(team.over_3_5_shots_on_target_prob || 0)}</strong></div>
+         </div>
+       `;
+       return `
+         <div class="team-market-list">
+           ${Object.keys(home).length ? row(home) : ""}
+           ${Object.keys(away).length ? row(away) : ""}
+         </div>
+       `;
+     }
 
     function renderPlayerMarkets(playerMarkets) {
       if (!playerMarkets || !Object.keys(playerMarkets).length) return "";
@@ -1732,20 +2793,557 @@
       `).join("");
     }
 
-    function renderCalibrationPlan(markets) {
-      const cards = [
-        ["Tarjetas", markets.cards?.direction || "sin datos", "Ajustar baseline por competicion y arbitro."],
-        ["Corners", markets.corners?.direction || "sin datos", "Separar por estilo, localia y dominio territorial."],
-        ["Tiros a puerta", markets.shots_on_target?.direction || "sin datos", "Distinguir volumen de tiros vs eficacia."],
-        ["Empates", "pendiente", "Subir peso en partidos cerrados y fases de bajo riesgo."],
+    function buildCalibrationModel(data) {
+      return {
+        rawRows: data.rows || [],
+        sourceMetrics: data.metrics || {},
+      };
+    }
+
+    function calibrationRowsForWindow() {
+      const rows = calibrationData?.rawRows || [];
+      const value = document.querySelector("#calibrationWindow")?.value || "30";
+      if (value === "all" || !rows.length) return rows;
+      const sortedDates = rows.map(row => row.match_date).filter(Boolean).sort();
+      const maxDate = sortedDates[sortedDates.length - 1];
+      if (!maxDate) return rows;
+      const start = new Date(`${maxDate}T00:00:00`);
+      start.setDate(start.getDate() - Number(value));
+      return rows.filter(row => !row.match_date || new Date(`${row.match_date}T00:00:00`) >= start);
+    }
+
+    function calibrationMetrics(rows) {
+      const evaluated = rows.filter(row => row.actual_outcome);
+      const accuracy = safeRatio(evaluated.filter(row => row.winner_hit).length, evaluated.length);
+      const exactTop2 = safeRatio(evaluated.filter(row => row.exact_score_top2_hit).length, evaluated.filter(row => (row.top_scores || []).length).length);
+      const marketMetrics = {
+        winner: {label: "Ganador", count: evaluated.length, accuracy, brier: avgBrier1x2(evaluated), log_loss: avgLogLoss1x2(evaluated), type: "classification"},
+        corners: regressionFromRows(evaluated, "predicted_corners", "actual_corners", "Corners"),
+        shots_on_target: regressionFromRows(evaluated, "predicted_shots_on_target", "actual_shots_on_target", "Tiros puerta"),
+        cards: regressionFromRows(evaluated, "predicted_cards", "actual_cards", "Tarjetas"),
+        over_2_5: binaryFromRows(evaluated, "predicted_over_2_5_prob", "actual_over_2_5", "Over 2.5"),
+        both_teams_score: binaryFromRows(evaluated, "predicted_btts_prob", "actual_btts", "BTTS"),
+      };
+      const maeValues = Object.values(marketMetrics).map(item => item.mae).filter(value => value != null);
+      const biasValues = Object.values(marketMetrics).map(item => Math.abs(Number(item.bias))).filter(value => Number.isFinite(value));
+      const brierValues = Object.values(marketMetrics).map(item => item.brier).filter(value => value != null);
+      const avgMae = average(maeValues);
+      const avgBias = average(biasValues);
+      const avgBrier = average(brierValues);
+      const coverage = safeRatio(evaluated.length, Math.max(1, calibrationData?.rawRows?.length || evaluated.length));
+      const score = modelHealthScore({accuracy, avgMae, avgBias, avgBrier, coverage, count: evaluated.length});
+      return {
+        rows: evaluated,
+        matches: evaluated.length,
+        accuracy,
+        exactTop2,
+        logLoss: marketMetrics.winner.log_loss,
+        brier: marketMetrics.winner.brier,
+        avgMae,
+        avgBias,
+        avgBrier,
+        coverage,
+        score,
+        health: healthLabel(score),
+        markets: marketMetrics,
+        evolution: calibrationEvolution(evaluated),
+        competitions: segmentCalibration(evaluated, "competition"),
+        teams: teamCalibration(evaluated),
+        anomalies: calibrationAnomalies(evaluated),
+        confidence: confidenceBuckets(evaluated),
+      };
+    }
+
+    function renderCalibrationCenter() {
+      if (!calibrationData) return;
+      const metrics = calibrationMetrics(calibrationRowsForWindow());
+      renderCalibrationHeader(metrics);
+      renderCalibrationTabs();
+      if (calibrationTab === "markets") return renderCalibrationMarkets(metrics);
+      if (calibrationTab === "segments") return renderCalibrationSegments(metrics);
+      if (calibrationTab === "anomalies") return renderCalibrationAnomalies(metrics);
+      if (calibrationTab === "simulation") return renderCalibrationSimulation(metrics);
+      return renderCalibrationOverview(metrics);
+    }
+
+    function renderCalibrationHeader(metrics) {
+      document.querySelector("#calibrationHealthTitle").textContent = `${metrics.health.label}: ${metrics.score}/100`;
+      document.querySelector("#calibrationHealthCopy").textContent = `${metrics.matches} partidos evaluados. Accuracy ${pct(metrics.accuracy)}; Brier ${fmtMetric(metrics.brier)}; sesgo medio ${fmtMetric(metrics.avgBias)}.`;
+      document.querySelector("#calibrationHealthGauge").innerHTML = `
+        <div class="gauge-ring ${metrics.health.key}" style="--score:${metrics.score * 3.6}deg"><strong>${metrics.score}</strong><span>/100</span></div>
+        <em>${metrics.health.action}</em>
+      `;
+      const kpis = [
+        ["Precision global", pct(metrics.accuracy), trendLabel(metrics.accuracy, 0.62, true), "green"],
+        ["MAE medio", fmtMetric(metrics.avgMae), trendLabel(metrics.avgMae, 1.7, false), "amber"],
+        ["RMSE mercado", fmtMetric(average(Object.values(metrics.markets).map(m => m.rmse).filter(v => v != null))), "volatilidad", "blue"],
+        ["Bias global", fmtMetric(metrics.avgBias), trendLabel(metrics.avgBias, 0.45, false), "teal"],
+        ["Brier 1X2", fmtMetric(metrics.brier), trendLabel(metrics.brier, 0.72, false), "indigo"],
+        ["Cobertura", pct(metrics.coverage), `${metrics.matches} evaluados`, "gray"],
       ];
-      document.querySelector("#calibrationPlan").innerHTML = cards.map(([name, status, detail]) => `
-        <div class="calibration-card ${status}">
-          <b>${name}</b>
-          <span>${status}</span>
-          <p>${detail}</p>
+      document.querySelector("#calibrationKpis").innerHTML = kpis.map(([label, value, detail, tone]) => `
+        <div class="calibration-kpi ${tone}">
+          <span>${label}</span>
+          <strong>${value}</strong>
+          <em>${detail}</em>
         </div>
       `).join("");
+    }
+
+    function renderCalibrationTabs() {
+      document.querySelectorAll("[data-calibration-tab]").forEach(button => button.classList.toggle("active", button.dataset.calibrationTab === calibrationTab));
+    }
+
+    function setCalibrationTab(tab) {
+      calibrationTab = tab;
+      renderCalibrationCenter();
+    }
+
+    function renderCalibrationOverview(metrics) {
+      document.querySelector("#calibrationWorkspace").innerHTML = `
+        <div class="calibration-layout">
+          <section class="calibration-panel wide">
+            <div class="premium-heading"><span>Evolucion historica</span><b>${metrics.evolution.length} puntos</b></div>
+            ${calibrationTrendChart(metrics.evolution)}
+          </section>
+          <section class="calibration-panel">
+            <div class="premium-heading"><span>Rendimiento por confianza</span><b>probabilidades</b></div>
+            ${confidenceCalibration(metrics.confidence)}
+          </section>
+        </div>
+        <div class="calibration-layout">
+          <section class="calibration-panel">
+            <div class="premium-heading"><span>Sesgos inteligentes</span><b>diagnostico</b></div>
+            <div class="smart-bias-list">${smartBiasCards(metrics).join("")}</div>
+          </section>
+          <section class="calibration-panel">
+            <div class="premium-heading"><span>La IA recomienda</span><b>acciones</b></div>
+            <div class="recommendation-list">${calibrationRecommendations(metrics).join("")}</div>
+          </section>
+        </div>
+      `;
+    }
+
+    function renderCalibrationMarkets(metrics) {
+      const filter = document.querySelector("#calibrationMarketFilter")?.value || "all";
+      const markets = Object.entries(metrics.markets)
+        .filter(([key]) => filter === "all" || key === filter)
+        .map(([key, value]) => ({key, ...value, priority: marketPriority(value)}))
+        .sort((a, b) => b.priority.score - a.priority.score);
+      document.querySelector("#calibrationWorkspace").innerHTML = `
+        <div class="market-score-grid">
+          ${markets.map((market, index) => calibrationMarketCard(market, index + 1)).join("")}
+        </div>
+        <section class="calibration-panel">
+          <div class="premium-heading"><span>Tabla de mercados</span><b>ordenada por prioridad</b></div>
+          <div class="table-wrap compact-table database-table">
+            <table>
+              <thead><tr><th>#</th><th>Mercado</th><th>Precision</th><th>Bias</th><th>MAE</th><th>RMSE</th><th>Brier</th><th>Log Loss</th><th>Estado</th><th>Prioridad</th></tr></thead>
+              <tbody>${markets.map((market, index) => `
+                <tr>
+                  <td>${index + 1}</td>
+                  <td><b>${market.label}</b></td>
+                  <td>${market.accuracy == null ? "-" : pct(market.accuracy)}</td>
+                  <td>${fmtMetric(market.bias)}</td>
+                  <td>${fmtMetric(market.mae)}</td>
+                  <td>${fmtMetric(market.rmse)}</td>
+                  <td>${fmtMetric(market.brier)}</td>
+                  <td>${fmtMetric(market.log_loss)}</td>
+                  <td><span class="status-tag ${marketStatus(market).key}">${marketStatus(market).label}</span></td>
+                  <td>${market.priority.label}</td>
+                </tr>
+              `).join("")}</tbody>
+            </table>
+          </div>
+        </section>
+      `;
+    }
+
+    function renderCalibrationSegments(metrics) {
+      document.querySelector("#calibrationWorkspace").innerHTML = `
+        <div class="calibration-layout">
+          <section class="calibration-panel">
+            <div class="premium-heading"><span>Por competencia</span><b>${metrics.competitions.length} ligas</b></div>
+            ${segmentTable(metrics.competitions, "Competencia")}
+          </section>
+          <section class="calibration-panel">
+            <div class="premium-heading"><span>Por equipo</span><b>anomalias</b></div>
+            ${segmentTable(metrics.teams, "Equipo")}
+          </section>
+        </div>
+        <section class="calibration-panel">
+          <div class="premium-heading"><span>Heatmap competencia x mercado</span><b>error promedio</b></div>
+          ${heatmapCalibration(metrics)}
+        </section>
+      `;
+    }
+
+    function renderCalibrationAnomalies(metrics) {
+      document.querySelector("#calibrationWorkspace").innerHTML = `
+        <section class="calibration-panel">
+          <div class="premium-heading"><span>Deteccion de anomalias</span><b>${metrics.anomalies.length} outliers</b></div>
+          <div class="anomaly-list">
+            ${metrics.anomalies.length ? metrics.anomalies.slice(0, 12).map(item => `
+              <div class="anomaly-row ${item.severity}">
+                <div><b>${item.home_team} vs ${item.away_team}</b><span>${item.match_date} - ${item.competition}</span></div>
+                <div><span>Mercado</span><strong>${item.market}</strong></div>
+                <div><span>Error</span><strong>${fmtMetric(item.error)}</strong></div>
+                <p>${item.explanation}</p>
+              </div>
+            `).join("") : `<div class="empty-state">No hay anomalias fuertes en esta ventana.</div>`}
+          </div>
+        </section>
+      `;
+    }
+
+    function renderCalibrationSimulation(metrics) {
+      document.querySelector("#calibrationWorkspace").innerHTML = `
+        <section class="calibration-panel">
+          <div class="premium-heading"><span>Simulacion de recalibracion</span><b>what-if</b></div>
+          <div class="simulation-lab">
+            ${simulationSlider("Elo", 0)}
+            ${simulationSlider("Forma", 0)}
+            ${simulationSlider("xG", 0)}
+            ${simulationSlider("Arbitro", Math.abs(Number(metrics.markets.cards?.bias || 0)) > 0.5 ? 12 : 0)}
+            ${simulationSlider("Lesiones", 0)}
+          </div>
+          <div class="simulation-impact">
+            <div><span>Impacto esperado</span><strong>${simulatedImpact(metrics)}</strong><em>Estimacion visual basada en sesgos actuales; no reentrena el modelo.</em></div>
+          </div>
+        </section>
+      `;
+    }
+
+    function regressionFromRows(rows, predictedKey, actualKey, label) {
+      const pairs = rows.filter(row => row[predictedKey] != null && row[actualKey] != null).map(row => Number(row[predictedKey]) - Number(row[actualKey]));
+      if (!pairs.length) return {label, count: 0, mae: null, rmse: null, bias: null, direction: "sin datos", type: "regression"};
+      const mae = average(pairs.map(Math.abs));
+      const rmse = Math.sqrt(average(pairs.map(value => value * value)));
+      const bias = average(pairs);
+      return {label, count: pairs.length, mae, rmse, bias, direction: biasDirection(bias), type: "regression"};
+    }
+
+    function binaryFromRows(rows, probKey, actualKey, label) {
+      const pairs = rows.filter(row => row[probKey] != null && row[actualKey] != null).map(row => [Number(row[probKey]), Number(row[actualKey])]);
+      if (!pairs.length) return {label, count: 0, brier: null, log_loss: null, accuracy: null, direction: "sin datos", type: "binary"};
+      const brier = average(pairs.map(([prob, actual]) => (prob - actual) ** 2));
+      const logLoss = -average(pairs.map(([prob, actual]) => actual * Math.log(clip01(prob)) + (1 - actual) * Math.log(clip01(1 - prob))));
+      const accuracy = safeRatio(pairs.filter(([prob, actual]) => (prob >= 0.5 ? 1 : 0) === actual).length, pairs.length);
+      return {label, count: pairs.length, brier, log_loss: logLoss, accuracy, direction: "calibrado", type: "binary"};
+    }
+
+    function avgBrier1x2(rows) {
+      const valid = rows.filter(row => row.predicted_home_prob != null && row.predicted_draw_prob != null && row.predicted_away_prob != null && row.actual_outcome);
+      return valid.length ? average(valid.map(row => ["home", "draw", "away"].reduce((sum, key) => sum + (Number(row[`predicted_${key}_prob`] || 0) - (row.actual_outcome === key ? 1 : 0)) ** 2, 0))) : null;
+    }
+
+    function avgLogLoss1x2(rows) {
+      const valid = rows.filter(row => row.predicted_home_prob != null && row.predicted_draw_prob != null && row.predicted_away_prob != null && row.actual_outcome);
+      return valid.length ? -average(valid.map(row => Math.log(clip01(Number(row[`predicted_${row.actual_outcome}_prob`] || 0))))) : null;
+    }
+
+    function calibrationEvolution(rows) {
+      const groups = groupBy(rows, row => row.match_date || "sin fecha");
+      return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b)).map(([date, items]) => ({
+        date,
+        accuracy: safeRatio(items.filter(row => row.winner_hit).length, items.length),
+        mae: average(["predicted_corners", "predicted_shots_on_target", "predicted_cards"].flatMap((key, index) => {
+          const actual = ["actual_corners", "actual_shots_on_target", "actual_cards"][index];
+          return items.filter(row => row[key] != null && row[actual] != null).map(row => Math.abs(Number(row[key]) - Number(row[actual])));
+        })),
+        bias: average(["predicted_corners", "predicted_shots_on_target", "predicted_cards"].flatMap((key, index) => {
+          const actual = ["actual_corners", "actual_shots_on_target", "actual_cards"][index];
+          return items.filter(row => row[key] != null && row[actual] != null).map(row => Number(row[key]) - Number(row[actual]));
+        })),
+      }));
+    }
+
+    function segmentCalibration(rows, key) {
+      return Object.entries(groupBy(rows, row => row[key] || "Sin dato")).map(([name, items]) => {
+        const marketErrors = items.flatMap(row => [
+          absError(row.predicted_corners, row.actual_corners),
+          absError(row.predicted_shots_on_target, row.actual_shots_on_target),
+          absError(row.predicted_cards, row.actual_cards),
+        ]).filter(value => value != null);
+        return {
+          name,
+          count: items.length,
+          accuracy: safeRatio(items.filter(row => row.winner_hit).length, items.length),
+          mae: average(marketErrors),
+          bias: average(items.flatMap(row => [
+            signedError(row.predicted_corners, row.actual_corners),
+            signedError(row.predicted_shots_on_target, row.actual_shots_on_target),
+            signedError(row.predicted_cards, row.actual_cards),
+          ]).filter(value => value != null)),
+        };
+      }).filter(item => item.count >= 1).sort((a, b) => Number(b.mae || 0) - Number(a.mae || 0)).slice(0, 12);
+    }
+
+    function teamCalibration(rows) {
+      const expanded = rows.flatMap(row => [
+        {...row, team: row.home_team},
+        {...row, team: row.away_team},
+      ]);
+      return segmentCalibration(expanded, "team").slice(0, 12);
+    }
+
+    function calibrationAnomalies(rows) {
+      return rows.map(row => {
+        const errors = [
+          ["Corners", absError(row.predicted_corners, row.actual_corners)],
+          ["Tiros puerta", absError(row.predicted_shots_on_target, row.actual_shots_on_target)],
+          ["Tarjetas", absError(row.predicted_cards, row.actual_cards)],
+        ].filter(([, value]) => value != null).sort((a, b) => b[1] - a[1]);
+        const top = errors[0] || ["Ganador", row.winner_hit ? 0 : 1];
+        const score = Number(top[1] || 0) + (row.winner_hit ? 0 : 1.5);
+        return {
+          ...row,
+          market: top[0],
+          error: top[1],
+          score,
+          severity: score >= 4 ? "critical" : score >= 2 ? "warning" : "normal",
+          explanation: row.winner_hit ? "El mercado secundario se alejo del resultado real." : "El pick principal fallo y conviene revisar contexto, alineaciones o motivacion.",
+        };
+      }).filter(item => item.score >= 1.5).sort((a, b) => b.score - a.score);
+    }
+
+    function confidenceBuckets(rows) {
+      const buckets = [
+        {label: "90-100%", min: 0.9, max: 1.01},
+        {label: "80-90%", min: 0.8, max: 0.9},
+        {label: "70-80%", min: 0.7, max: 0.8},
+        {label: "60-70%", min: 0.6, max: 0.7},
+        {label: "<60%", min: 0, max: 0.6},
+      ];
+      return buckets.map(bucket => {
+        const items = rows.filter(row => {
+          const conf = Math.max(Number(row.predicted_home_prob || 0), Number(row.predicted_draw_prob || 0), Number(row.predicted_away_prob || 0));
+          return conf >= bucket.min && conf < bucket.max;
+        });
+        return {...bucket, count: items.length, accuracy: safeRatio(items.filter(row => row.winner_hit).length, items.length)};
+      });
+    }
+
+    function modelHealthScore({accuracy, avgMae, avgBias, avgBrier, coverage, count}) {
+      const accuracyScore = clamp01(Number(accuracy || 0)) * 32;
+      const maeScore = (1 - clamp01(Number(avgMae || 3) / 3.5)) * 20;
+      const biasScore = (1 - clamp01(Number(avgBias || 1) / 1.2)) * 16;
+      const brierScore = (1 - clamp01(Number(avgBrier || 1) / 1.2)) * 16;
+      const coverageScore = clamp01(Number(coverage || 0)) * 8;
+      const volumeScore = clamp01(Number(count || 0) / 100) * 8;
+      return Math.round(accuracyScore + maeScore + biasScore + brierScore + coverageScore + volumeScore);
+    }
+
+    function healthLabel(score) {
+      if (score >= 85) return {key: "excellent", label: "Excelente", action: "Mantener calibracion y monitorear outliers"};
+      if (score >= 70) return {key: "good", label: "Buena", action: "Ajustar mercados secundarios con prioridad media"};
+      if (score >= 55) return {key: "watch", label: "Mejorable", action: "Revisar sesgos antes de apostar con confianza alta"};
+      return {key: "critical", label: "Requiere calibracion", action: "Reentrenar o ampliar datos antes de automatizar picks"};
+    }
+
+    function calibrationTrendChart(points) {
+      if (!points.length) return `<div class="empty-state">Sin historial evaluado.</div>`;
+      const recent = points.slice(-18);
+      return `<div class="trend-chart">${recent.map(point => `
+        <div class="trend-column">
+          <i style="height:${Math.max(8, Number(point.accuracy || 0) * 100)}%"></i>
+          <span>${String(point.date).slice(5)}</span>
+        </div>
+      `).join("")}</div>`;
+    }
+
+    function confidenceCalibration(items) {
+      return `<div class="confidence-board">${items.map(item => `
+        <div class="confidence-row">
+          <span>${item.label}</span>
+          <div><i style="width:${pct(item.accuracy || 0)}"></i></div>
+          <b>${item.count ? pct(item.accuracy) : "-"}</b>
+          <em>${item.count} picks</em>
+        </div>
+      `).join("")}</div>`;
+    }
+
+    function smartBiasCards(metrics) {
+      return Object.values(metrics.markets).filter(market => market.type === "regression" && market.count).map(market => {
+        const status = marketStatus(market);
+        const absBias = Math.abs(Number(market.bias || 0));
+        return `
+          <div class="smart-bias-card ${status.key}">
+            <div><b>${market.label}</b><span>${status.label}</span></div>
+            <p>El modelo ${market.direction} en promedio ${num(absBias)} unidades.</p>
+            <em>${biasCause(market.label, market.direction)}</em>
+            <strong>Confianza ${pct(Math.min(0.95, 0.45 + (market.count / 100)))}</strong>
+          </div>
+        `;
+      });
+    }
+
+    function calibrationRecommendations(metrics) {
+      const recs = [];
+      Object.values(metrics.markets).forEach(market => {
+        const priority = marketPriority(market);
+        if (priority.score > 0) recs.push({market: market.label, priority, text: recommendationText(market)});
+      });
+      if (Number(metrics.accuracy || 0) < 0.58) recs.push({market: "Ganador", priority: {label: "Alta", key: "critical", score: 4}, text: "Separar modelo por competencia y fase del torneo."});
+      return (recs.length ? recs : [{market: "Sistema", priority: {label: "Baja", key: "ready", score: 0}, text: "Mantener monitoreo; no hay sesgos graves en esta ventana."}]).sort((a, b) => b.priority.score - a.priority.score).slice(0, 6).map(item => `
+        <div class="recommendation-row ${item.priority.key}">
+          <span>${item.priority.label}</span>
+          <b>${item.market}</b>
+          <p>${item.text}</p>
+        </div>
+      `);
+    }
+
+    function calibrationMarketCard(market, rank) {
+      const status = marketStatus(market);
+      return `
+        <article class="market-score-card ${status.key}">
+          <div><span>#${rank}</span><b>${market.label}</b></div>
+          <strong>${market.accuracy == null ? fmtMetric(market.mae) : pct(market.accuracy)}</strong>
+          <em>${status.label} - ${market.count || 0} muestras</em>
+          <div class="market-score-meta">
+            <span>MAE ${fmtMetric(market.mae)}</span>
+            <span>Bias ${fmtMetric(market.bias)}</span>
+            <span>Brier ${fmtMetric(market.brier)}</span>
+          </div>
+        </article>
+      `;
+    }
+
+    function segmentTable(items, label) {
+      return `
+        <div class="table-wrap compact-table database-table">
+          <table>
+            <thead><tr><th>${label}</th><th>Partidos</th><th>Accuracy</th><th>MAE</th><th>Bias</th><th>Estado</th></tr></thead>
+            <tbody>${items.map(item => {
+              const status = segmentStatus(item);
+              return `<tr><td><b>${item.name}</b></td><td>${item.count}</td><td>${pct(item.accuracy)}</td><td>${fmtMetric(item.mae)}</td><td>${fmtMetric(item.bias)}</td><td><span class="status-tag ${status.key}">${status.label}</span></td></tr>`;
+            }).join("")}</tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    function heatmapCalibration(metrics) {
+      const markets = ["corners", "shots_on_target", "cards"];
+      return `<div class="calibration-heatmap">${metrics.competitions.slice(0, 8).map(comp => `
+        <div class="heatmap-row">
+          <b>${comp.name}</b>
+          ${markets.map(market => `<span class="${heatTone(comp.mae)}">${fmtMetric(comp.mae)}</span>`).join("")}
+        </div>
+      `).join("")}</div>`;
+    }
+
+    function simulationSlider(label, value) {
+      return `<label class="simulation-control"><span>${label}</span><input type="range" min="-25" max="25" value="${value}"><b>${value > 0 ? "+" : ""}${value}%</b></label>`;
+    }
+
+    function simulatedImpact(metrics) {
+      const worst = Object.values(metrics.markets).sort((a, b) => marketPriority(b).score - marketPriority(a).score)[0];
+      if (!worst || marketPriority(worst).score <= 0) return "Bajo";
+      return `Reducir ${worst.label} podria mejorar ${Math.min(12, Math.round(marketPriority(worst).score * 2.5))}%`;
+    }
+
+    function marketStatus(market) {
+      if (!market || !market.count) return {key: "inactive", label: "Sin datos"};
+      const badBias = Math.abs(Number(market.bias || 0)) > 0.75;
+      const badMae = Number(market.mae || 0) > 2.2;
+      const badBrier = Number(market.brier || 0) > 0.35;
+      if (badBias || badMae || badBrier) return {key: "critical", label: "Critico"};
+      if (Math.abs(Number(market.bias || 0)) > 0.35 || Number(market.mae || 0) > 1.25 || Number(market.brier || 0) > 0.25) return {key: "mixed", label: "Mejorable"};
+      return {key: "ready", label: "Estable"};
+    }
+
+    function marketPriority(market) {
+      if (!market || !market.count) return {score: 0, label: "Baja", key: "ready"};
+      const score = (Math.abs(Number(market.bias || 0)) * 2) + Number(market.mae || 0) + (Number(market.brier || 0) * 4) + (Number(market.count || 0) < 10 ? 0.8 : 0);
+      if (score >= 3) return {score, label: "Alta", key: "critical"};
+      if (score >= 1.4) return {score, label: "Media", key: "mixed"};
+      return {score, label: "Baja", key: "ready"};
+    }
+
+    function segmentStatus(item) {
+      if (Number(item.mae || 0) > 2 || Number(item.accuracy || 0) < 0.45) return {key: "critical", label: "Revisar"};
+      if (Number(item.mae || 0) > 1.2 || Number(item.accuracy || 0) < 0.58) return {key: "mixed", label: "Vigilar"};
+      return {key: "ready", label: "Bien"};
+    }
+
+    function recommendationText(market) {
+      if (market.label === "Tarjetas") return "Subir peso de arbitro, fase del partido y rivalidad antes de recalibrar tarjetas.";
+      if (market.label === "Corners") return "Separar corners por posesion, presion ofensiva y localia.";
+      if (market.label === "Tiros puerta") return "Distinguir volumen de tiros de eficacia y calidad ofensiva reciente.";
+      if (market.label === "Ganador") return "Revisar ranking, localia, lesiones y contexto competitivo.";
+      return "Aumentar muestra evaluada y recalibrar probabilidad por rangos de confianza.";
+    }
+
+    function biasCause(label, direction) {
+      if (direction === "calibrado") return "No requiere ajuste fuerte; mantener monitoreo por competencia.";
+      const verb = direction === "sobreestima" ? "esta inflando" : "esta castigando";
+      if (label === "Tarjetas") return `Probable causa: el modelo ${verb} intensidad sin suficiente perfil arbitral.`;
+      if (label === "Corners") return `Probable causa: el modelo ${verb} dominio territorial o ritmo ofensivo.`;
+      return `Probable causa: el modelo ${verb} eficacia ofensiva frente al volumen real.`;
+    }
+
+    function trendLabel(value, target, higherIsBetter) {
+      if (value == null) return "sin dato";
+      const good = higherIsBetter ? Number(value) >= target : Number(value) <= target;
+      return good ? "mejor que objetivo" : "requiere ajuste";
+    }
+
+    function exportCalibrationJson() {
+      if (!calibrationData) return;
+      const blob = new Blob([JSON.stringify(calibrationMetrics(calibrationRowsForWindow()), null, 2)], {type: "application/json"});
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `football-calibration-${new Date().toISOString().slice(0, 10)}.json`;
+      link.click();
+      URL.revokeObjectURL(link.href);
+    }
+
+    function groupBy(items, fn) {
+      return items.reduce((acc, item) => {
+        const key = fn(item);
+        acc[key] = acc[key] || [];
+        acc[key].push(item);
+        return acc;
+      }, {});
+    }
+
+    function average(values) {
+      const clean = values.filter(value => value != null && Number.isFinite(Number(value)));
+      return clean.length ? clean.reduce((sum, value) => sum + Number(value), 0) / clean.length : null;
+    }
+
+    function absError(predicted, actual) {
+      return predicted == null || actual == null ? null : Math.abs(Number(predicted) - Number(actual));
+    }
+
+    function signedError(predicted, actual) {
+      return predicted == null || actual == null ? null : Number(predicted) - Number(actual);
+    }
+
+    function safeRatio(numValue, denValue) {
+      return denValue ? numValue / denValue : null;
+    }
+
+    function clip01(value) {
+      return Math.min(Math.max(Number(value || 0), 1e-9), 1 - 1e-9);
+    }
+
+    function clamp01(value) {
+      return Math.min(Math.max(Number(value || 0), 0), 1);
+    }
+
+    function biasDirection(value) {
+      if (value > 0.25) return "sobreestima";
+      if (value < -0.25) return "subestima";
+      return "calibrado";
+    }
+
+    function heatTone(value) {
+      if (Number(value || 0) > 2) return "critical";
+      if (Number(value || 0) > 1.2) return "mixed";
+      return "ready";
     }
 
     function probLine(label, value, kind) {

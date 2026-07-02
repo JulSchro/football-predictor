@@ -86,5 +86,37 @@ def test_secondary_markets_use_recent_stats_and_opponent_allowed() -> None:
     markets = estimate_secondary_markets(stats, "Mexico", "France")
 
     assert markets["home_corners_expected"] > 5
+    assert markets["away_corners_expected"] > 4
     assert markets["shots_on_target_expected"] > 8
+    assert markets["home_shots_on_target_expected"] > 4
+    assert markets["team_markets"]["home"]["team"] == "Mexico"
+    assert markets["team_markets"]["home"]["corners_range"]["label"]
+    assert 0 <= markets["team_markets"]["away"]["over_3_5_shots_on_target_prob"] <= 1
     assert markets["advanced_samples"]["home"] == 2
+
+
+def test_secondary_markets_adjust_cards_with_referee_profile() -> None:
+    stats = pd.DataFrame(
+        [
+            {"date": "2026-06-01", "team": "A", "opponent": "B", "corners": 4, "total_shots": 10, "shots_on_target": 4, "cards_estimate": 2, "fouls": 10},
+            {"date": "2026-06-02", "team": "B", "opponent": "A", "corners": 5, "total_shots": 11, "shots_on_target": 5, "cards_estimate": 2, "fouls": 10},
+        ]
+    )
+
+    baseline = estimate_secondary_markets(stats, "A", "B")
+    adjusted = estimate_secondary_markets(
+        stats,
+        "A",
+        "B",
+        {
+            "available": True,
+            "referee_name": "Strict Ref",
+            "matches": 8,
+            "avg_cards": 7.0,
+            "strictness_label": "muy estricto",
+        },
+    )
+
+    assert adjusted["total_cards_expected"] > baseline["total_cards_expected"]
+    assert adjusted["referee_cards"]["applied"] is True
+    assert adjusted["referee_cards"]["profile"]["referee_name"] == "Strict Ref"

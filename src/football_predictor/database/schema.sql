@@ -291,6 +291,79 @@ CREATE TABLE IF NOT EXISTS match_team_advanced_stats (
     UNIQUE(source_match_id, team)
 );
 
+CREATE TABLE IF NOT EXISTS referees (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    country TEXT,
+    source TEXT NOT NULL DEFAULT 'api_football',
+    raw_json TEXT,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(name, country, source)
+);
+
+CREATE TABLE IF NOT EXISTS referee_match_history (
+    fixture_id INTEGER PRIMARY KEY,
+    referee_id INTEGER NOT NULL,
+    referee_name TEXT NOT NULL,
+    referee_country TEXT,
+    date TEXT,
+    league_id INTEGER,
+    league_name TEXT,
+    season INTEGER,
+    round TEXT,
+    home_team TEXT,
+    away_team TEXT,
+    home_yellow INTEGER,
+    away_yellow INTEGER,
+    home_red INTEGER,
+    away_red INTEGER,
+    home_cards REAL,
+    away_cards REAL,
+    total_yellow INTEGER,
+    total_red INTEGER,
+    total_cards REAL,
+    home_fouls INTEGER,
+    away_fouls INTEGER,
+    total_fouls INTEGER,
+    penalties INTEGER,
+    raw_events_json TEXT,
+    raw_fixture_json TEXT,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(referee_id) REFERENCES referees(id)
+);
+
+CREATE TABLE IF NOT EXISTS referee_metrics (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    referee_id INTEGER NOT NULL,
+    scope_type TEXT NOT NULL,
+    scope_value TEXT NOT NULL,
+    matches INTEGER NOT NULL,
+    avg_yellow REAL,
+    avg_red REAL,
+    avg_cards REAL,
+    avg_home_cards REAL,
+    avg_away_cards REAL,
+    home_away_diff REAL,
+    avg_fouls REAL,
+    penalty_rate REAL,
+    std_cards REAL,
+    p25_cards REAL,
+    p50_cards REAL,
+    p75_cards REAL,
+    last5_avg_cards REAL,
+    last10_avg_cards REAL,
+    recent_trend REAL,
+    consistency REAL,
+    strictness_percentile REAL,
+    strictness_label TEXT,
+    home_bias_label TEXT,
+    away_bias_label TEXT,
+    profile_json TEXT,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(referee_id) REFERENCES referees(id),
+    UNIQUE(referee_id, scope_type, scope_value)
+);
+
 CREATE TABLE IF NOT EXISTS match_context (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     match_key TEXT NOT NULL UNIQUE,
@@ -440,6 +513,50 @@ CREATE TABLE IF NOT EXISTS sync_inventory (
     UNIQUE(provider, entity_type, league_id, season, data_type)
 );
 
+CREATE TABLE IF NOT EXISTS api_football_league_coverage (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    league_id INTEGER NOT NULL,
+    league_name TEXT,
+    league_type TEXT,
+    country TEXT,
+    country_code TEXT,
+    season INTEGER NOT NULL,
+    current INTEGER,
+    start_date TEXT,
+    end_date TEXT,
+    fixtures_events INTEGER,
+    fixtures_lineups INTEGER,
+    fixtures_statistics_fixtures INTEGER,
+    fixtures_statistics_players INTEGER,
+    standings INTEGER,
+    players INTEGER,
+    top_scorers INTEGER,
+    top_assists INTEGER,
+    top_cards INTEGER,
+    injuries INTEGER,
+    predictions INTEGER,
+    odds INTEGER,
+    raw_json TEXT,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(league_id, season)
+);
+
+CREATE TABLE IF NOT EXISTS fixture_detail_sync_status (
+    fixture_id INTEGER PRIMARY KEY,
+    status_short TEXT,
+    last_checked TEXT,
+    stats_completed INTEGER NOT NULL DEFAULT 0,
+    events_completed INTEGER NOT NULL DEFAULT 0,
+    lineups_completed INTEGER NOT NULL DEFAULT 0,
+    player_stats_completed INTEGER NOT NULL DEFAULT 0,
+    referee_completed INTEGER NOT NULL DEFAULT 0,
+    snapshots_updated INTEGER NOT NULL DEFAULT 0,
+    retry_after TEXT,
+    error_message TEXT,
+    raw_json TEXT,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS player_availability (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     source TEXT NOT NULL,
@@ -476,9 +593,13 @@ CREATE INDEX IF NOT EXISTS idx_api_fixtures_dedupe_lookup ON api_football_fixtur
     lower(league_name),
     CAST(season AS TEXT)
 );
+CREATE INDEX IF NOT EXISTS idx_fixture_detail_sync_retry ON fixture_detail_sync_status(stats_completed, retry_after);
 CREATE INDEX IF NOT EXISTS idx_match_context_match ON match_context(home_team, away_team, date);
 CREATE INDEX IF NOT EXISTS idx_advanced_stats_team_date ON match_team_advanced_stats(team, date);
 CREATE INDEX IF NOT EXISTS idx_advanced_stats_opponent ON match_team_advanced_stats(opponent);
+CREATE INDEX IF NOT EXISTS idx_referee_history_referee_date ON referee_match_history(referee_id, date);
+CREATE INDEX IF NOT EXISTS idx_referee_history_league_season ON referee_match_history(league_id, season);
+CREATE INDEX IF NOT EXISTS idx_referee_metrics_referee_scope ON referee_metrics(referee_id, scope_type, scope_value);
 CREATE INDEX IF NOT EXISTS idx_player_season_stats_team ON player_season_stats(team_name, season);
 CREATE INDEX IF NOT EXISTS idx_player_season_stats_team_nocase ON player_season_stats(team_name COLLATE NOCASE, season);
 CREATE INDEX IF NOT EXISTS idx_player_season_stats_player_team ON player_season_stats(player_id, team_name);

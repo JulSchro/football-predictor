@@ -6,7 +6,11 @@ __pycache__/
 venv/
 .env
 *.sqlite
+*.sqlite-*
 *.db
+*.db-*
+data/backtests/*
+data/backups/*
 data/raw/*
 data/processed/*
 models/*

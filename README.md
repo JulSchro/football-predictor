@@ -94,6 +94,32 @@ OpenFootball no requiere API key. API-Football y football-data.org requieren tok
 
 La interfaz muestra muchas variables avanzadas desde el principio. Cuando no hay fuente conectada, usa proxies del historial o valores neutrales visibles; no inventa lesiones, odds, clima ni datos de jugadores.
 
+## Deploy
+
+La app puede subirse como servicio web con FastAPI/Uvicorn.
+
+Render:
+
+1. Sube el repositorio a GitHub.
+2. En Render crea un Blueprint usando `render.yaml`.
+3. Configura `API_FOOTBALL_KEY` como variable secreta.
+4. Mantén `FOOTBALL_PREDICTOR_DB_PATH=/var/data/football_predictor.sqlite`.
+5. Usa disco persistente para no perder fixtures, predicciones ni calibracion.
+
+Comando de arranque:
+
+```bash
+uvicorn football_predictor.web.asgi:app --host 0.0.0.0 --port $PORT
+```
+
+Health check:
+
+```text
+/health
+```
+
+SQLite funciona bien para uso personal y una primera version publica. Si luego hay varios usuarios o jobs automaticos pesados, el siguiente paso natural es PostgreSQL.
+
 ## Proximos pasos
 
 - Mejorar el mapeo de nombres entre fuentes externas y selecciones.

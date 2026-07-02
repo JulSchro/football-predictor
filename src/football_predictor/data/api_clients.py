@@ -1,14 +1,28 @@
 import os
 from pathlib import Path
+import time
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
+from urllib.error import HTTPError, URLError
 import json
 
 
 def _get_json(url: str, headers: dict[str, str] | None = None) -> dict:
     request = Request(url, headers=headers or {})
-    with urlopen(request, timeout=20) as response:
-        return json.loads(response.read().decode("utf-8"))
+    last_error: Exception | None = None
+    for attempt in range(3):
+        try:
+            with urlopen(request, timeout=30) as response:
+                return json.loads(response.read().decode("utf-8"))
+        except HTTPError as exc:
+            last_error = exc
+            if exc.code not in {429, 500, 502, 503, 504}:
+                break
+            time.sleep(2**attempt)
+        except URLError as exc:
+            last_error = exc
+            time.sleep(2**attempt)
+    raise last_error or RuntimeError("request failed")
 
 
 class ApiFootballClient:
@@ -34,6 +48,9 @@ class ApiFootballClient:
 
     def fixture_statistics(self, fixture: int) -> dict:
         return self.get("fixtures/statistics", fixture=fixture)
+
+    def fixture_events(self, fixture: int) -> dict:
+        return self.get("fixtures/events", fixture=fixture)
 
     def fixture_lineups(self, fixture: int) -> dict:
         return self.get("fixtures/lineups", fixture=fixture)

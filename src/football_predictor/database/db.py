@@ -1,11 +1,22 @@
 from pathlib import Path
 import json
+import re
 import sqlite3
+import unicodedata
 
 from football_predictor.config import settings
 
 
 SCHEMA_PATH = Path(__file__).with_name("schema.sql")
+
+
+def normalize_competition_name(name: str | None, season: int | str | None = None) -> str | None:
+    if name is None:
+        return None
+    value = str(name).strip()
+    if value.lower() in {"world cup", "fifa world cup"} and str(season or "") == "2026":
+        return "World Cup 2026"
+    return value
 
 
 def connect(db_path: Path | str | None = None) -> sqlite3.Connection:
@@ -31,6 +42,53 @@ def ensure_schema_compatibility(conn: sqlite3.Connection) -> None:
     columns = {row["name"] for row in conn.execute("PRAGMA table_info(prediction_backtests)").fetchall()}
     if "snapshot_json" not in columns:
         conn.execute("ALTER TABLE prediction_backtests ADD COLUMN snapshot_json TEXT")
+    conn.execute(
+        """
+        UPDATE prediction_backtests
+        SET competition = 'World Cup 2026'
+        WHERE lower(competition) IN ('world cup', 'fifa world cup')
+          AND substr(match_date, 1, 4) = '2026'
+        """
+    )
+    conn.execute(
+        """
+        UPDATE api_football_fixtures
+        SET league_name = 'World Cup 2026'
+        WHERE lower(league_name) IN ('world cup', 'fifa world cup')
+          AND CAST(season AS TEXT) = '2026'
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS api_football_league_coverage (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            league_id INTEGER NOT NULL,
+            league_name TEXT,
+            league_type TEXT,
+            country TEXT,
+            country_code TEXT,
+            season INTEGER NOT NULL,
+            current INTEGER,
+            start_date TEXT,
+            end_date TEXT,
+            fixtures_events INTEGER,
+            fixtures_lineups INTEGER,
+            fixtures_statistics_fixtures INTEGER,
+            fixtures_statistics_players INTEGER,
+            standings INTEGER,
+            players INTEGER,
+            top_scorers INTEGER,
+            top_assists INTEGER,
+            top_cards INTEGER,
+            injuries INTEGER,
+            predictions INTEGER,
+            odds INTEGER,
+            raw_json TEXT,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(league_id, season)
+        )
+        """
+    )
     availability_columns = {row["name"] for row in conn.execute("PRAGMA table_info(player_availability)").fetchall()}
     availability_additions = {
         "player_id": "INTEGER",
@@ -139,6 +197,95 @@ def ensure_schema_compatibility(conn: sqlite3.Connection) -> None:
             UNIQUE(fixture_id, team_id, player_id, player_name, is_starting)
         );
 
+        CREATE TABLE IF NOT EXISTS fixture_detail_sync_status (
+            fixture_id INTEGER PRIMARY KEY,
+            status_short TEXT,
+            last_checked TEXT,
+            stats_completed INTEGER NOT NULL DEFAULT 0,
+            events_completed INTEGER NOT NULL DEFAULT 0,
+            lineups_completed INTEGER NOT NULL DEFAULT 0,
+            player_stats_completed INTEGER NOT NULL DEFAULT 0,
+            referee_completed INTEGER NOT NULL DEFAULT 0,
+            snapshots_updated INTEGER NOT NULL DEFAULT 0,
+            retry_after TEXT,
+            error_message TEXT,
+            raw_json TEXT,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS referees (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            country TEXT,
+            source TEXT NOT NULL DEFAULT 'api_football',
+            raw_json TEXT,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(name, country, source)
+        );
+
+        CREATE TABLE IF NOT EXISTS referee_match_history (
+            fixture_id INTEGER PRIMARY KEY,
+            referee_id INTEGER NOT NULL,
+            referee_name TEXT NOT NULL,
+            referee_country TEXT,
+            date TEXT,
+            league_id INTEGER,
+            league_name TEXT,
+            season INTEGER,
+            round TEXT,
+            home_team TEXT,
+            away_team TEXT,
+            home_yellow INTEGER,
+            away_yellow INTEGER,
+            home_red INTEGER,
+            away_red INTEGER,
+            home_cards REAL,
+            away_cards REAL,
+            total_yellow INTEGER,
+            total_red INTEGER,
+            total_cards REAL,
+            home_fouls INTEGER,
+            away_fouls INTEGER,
+            total_fouls INTEGER,
+            penalties INTEGER,
+            raw_events_json TEXT,
+            raw_fixture_json TEXT,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(referee_id) REFERENCES referees(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS referee_metrics (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            referee_id INTEGER NOT NULL,
+            scope_type TEXT NOT NULL,
+            scope_value TEXT NOT NULL,
+            matches INTEGER NOT NULL,
+            avg_yellow REAL,
+            avg_red REAL,
+            avg_cards REAL,
+            avg_home_cards REAL,
+            avg_away_cards REAL,
+            home_away_diff REAL,
+            avg_fouls REAL,
+            penalty_rate REAL,
+            std_cards REAL,
+            p25_cards REAL,
+            p50_cards REAL,
+            p75_cards REAL,
+            last5_avg_cards REAL,
+            last10_avg_cards REAL,
+            recent_trend REAL,
+            consistency REAL,
+            strictness_percentile REAL,
+            strictness_label TEXT,
+            home_bias_label TEXT,
+            away_bias_label TEXT,
+            profile_json TEXT,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(referee_id) REFERENCES referees(id),
+            UNIQUE(referee_id, scope_type, scope_value)
+        );
+
         CREATE INDEX IF NOT EXISTS idx_players_name ON players(name);
         CREATE INDEX IF NOT EXISTS idx_team_squads_team_season ON team_squads(team_name, season);
         CREATE INDEX IF NOT EXISTS idx_matches_date_id ON matches(date DESC, id DESC);
@@ -155,12 +302,16 @@ def ensure_schema_compatibility(conn: sqlite3.Connection) -> None:
             lower(league_name),
             CAST(season AS TEXT)
         );
+        CREATE INDEX IF NOT EXISTS idx_fixture_detail_sync_retry ON fixture_detail_sync_status(stats_completed, retry_after);
         CREATE INDEX IF NOT EXISTS idx_prediction_backtests_date_id ON prediction_backtests(match_date DESC, id DESC);
         CREATE INDEX IF NOT EXISTS idx_prediction_backtests_pending ON prediction_backtests(actual_home_goals, actual_away_goals, match_date);
         CREATE INDEX IF NOT EXISTS idx_prediction_backtests_match ON prediction_backtests(match_date, home_team, away_team);
         CREATE INDEX IF NOT EXISTS idx_match_context_match ON match_context(home_team, away_team, date);
         CREATE INDEX IF NOT EXISTS idx_advanced_stats_team_date ON match_team_advanced_stats(team, date);
         CREATE INDEX IF NOT EXISTS idx_advanced_stats_opponent ON match_team_advanced_stats(opponent);
+        CREATE INDEX IF NOT EXISTS idx_referee_history_referee_date ON referee_match_history(referee_id, date);
+        CREATE INDEX IF NOT EXISTS idx_referee_history_league_season ON referee_match_history(league_id, season);
+        CREATE INDEX IF NOT EXISTS idx_referee_metrics_referee_scope ON referee_metrics(referee_id, scope_type, scope_value);
         CREATE INDEX IF NOT EXISTS idx_player_season_stats_team ON player_season_stats(team_name, season);
         CREATE INDEX IF NOT EXISTS idx_player_season_stats_team_nocase ON player_season_stats(team_name COLLATE NOCASE, season);
         CREATE INDEX IF NOT EXISTS idx_player_season_stats_player_team ON player_season_stats(player_id, team_name);
@@ -374,20 +525,18 @@ def upsert_player(conn: sqlite3.Connection, player: dict) -> int:
     name = player.get("name") or player.get("player_name")
     if not name:
         raise ValueError("player name is required")
-    existing = None
-    if api_player_id is not None:
+    existing = conn.execute(
+        """
+        SELECT id
+        FROM players
+        WHERE lower(name) = lower(?)
+          AND COALESCE(birth_date, '') = COALESCE(?, '')
+          AND COALESCE(nationality, '') = COALESCE(?, '')
+        """,
+        (name, player.get("birth_date"), player.get("nationality")),
+    ).fetchone()
+    if existing is None and api_player_id is not None:
         existing = conn.execute("SELECT id FROM players WHERE api_player_id = ?", (api_player_id,)).fetchone()
-    if existing is None:
-        existing = conn.execute(
-            """
-            SELECT id
-            FROM players
-            WHERE lower(name) = lower(?)
-              AND COALESCE(birth_date, '') = COALESCE(?, '')
-              AND COALESCE(nationality, '') = COALESCE(?, '')
-            """,
-            (name, player.get("birth_date"), player.get("nationality")),
-        ).fetchone()
     payload = {
         "api_player_id": api_player_id,
         "name": name,
@@ -406,7 +555,13 @@ def upsert_player(conn: sqlite3.Connection, player: dict) -> int:
         conn.execute(
             """
             UPDATE players
-            SET api_player_id = COALESCE(:api_player_id, api_player_id),
+            SET api_player_id = CASE
+                    WHEN api_player_id IS NULL
+                     AND :api_player_id IS NOT NULL
+                     AND NOT EXISTS (SELECT 1 FROM players WHERE api_player_id = :api_player_id AND id != :id)
+                    THEN :api_player_id
+                    ELSE api_player_id
+                END,
                 name = :name,
                 firstname = COALESCE(:firstname, firstname),
                 lastname = COALESCE(:lastname, lastname),
@@ -424,17 +579,32 @@ def upsert_player(conn: sqlite3.Connection, player: dict) -> int:
             {**payload, "id": existing["id"]},
         )
         return int(existing["id"])
-    cursor = conn.execute(
-        """
-        INSERT INTO players
-        (api_player_id, name, firstname, lastname, birth_date, age, nationality,
-         height, weight, preferred_position, photo_url, raw_json, updated_at)
-        VALUES
-        (:api_player_id, :name, :firstname, :lastname, :birth_date, :age, :nationality,
-         :height, :weight, :preferred_position, :photo_url, :raw_json, CURRENT_TIMESTAMP)
-        """,
-        payload,
-    )
+    try:
+        cursor = conn.execute(
+            """
+            INSERT INTO players
+            (api_player_id, name, firstname, lastname, birth_date, age, nationality,
+             height, weight, preferred_position, photo_url, raw_json, updated_at)
+            VALUES
+            (:api_player_id, :name, :firstname, :lastname, :birth_date, :age, :nationality,
+             :height, :weight, :preferred_position, :photo_url, :raw_json, CURRENT_TIMESTAMP)
+            """,
+            payload,
+        )
+    except sqlite3.IntegrityError:
+        existing = conn.execute(
+            """
+            SELECT id
+            FROM players
+            WHERE name = ?
+              AND COALESCE(birth_date, '') = COALESCE(?, '')
+              AND COALESCE(nationality, '') = COALESCE(?, '')
+            """,
+            (name, player.get("birth_date"), player.get("nationality")),
+        ).fetchone()
+        if existing:
+            return int(existing["id"])
+        raise
     return int(cursor.lastrowid)
 
 
@@ -728,6 +898,10 @@ def get_match_context(
 
 
 def upsert_api_football_fixture(conn: sqlite3.Connection, fixture: dict) -> None:
+    payload = {
+        **fixture,
+        "league_name": normalize_competition_name(fixture.get("league_name"), fixture.get("season")),
+    }
     conn.execute(
         """
         INSERT INTO api_football_fixtures
@@ -751,7 +925,7 @@ def upsert_api_football_fixture(conn: sqlite3.Connection, fixture: dict) -> None
             raw_json = excluded.raw_json,
             updated_at = CURRENT_TIMESTAMP
         """,
-        {**fixture, "raw_json": json.dumps(fixture.get("raw", {}))},
+        {**payload, "raw_json": json.dumps(payload.get("raw", {}))},
     )
 
 
@@ -934,6 +1108,67 @@ def upsert_sync_inventory(conn: sqlite3.Connection, row: dict) -> None:
             updated_at = CURRENT_TIMESTAMP
         """,
         {**row, "raw_json": json.dumps(row.get("raw", {}))},
+    )
+
+
+def upsert_api_football_league_coverage(conn: sqlite3.Connection, row: dict) -> None:
+    conn.execute(
+        """
+        INSERT INTO api_football_league_coverage (
+            league_id, league_name, league_type, country, country_code, season, current,
+            start_date, end_date, fixtures_events, fixtures_lineups,
+            fixtures_statistics_fixtures, fixtures_statistics_players, standings, players,
+            top_scorers, top_assists, top_cards, injuries, predictions, odds, raw_json,
+            updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(league_id, season) DO UPDATE SET
+            league_name = excluded.league_name,
+            league_type = excluded.league_type,
+            country = excluded.country,
+            country_code = excluded.country_code,
+            current = excluded.current,
+            start_date = excluded.start_date,
+            end_date = excluded.end_date,
+            fixtures_events = excluded.fixtures_events,
+            fixtures_lineups = excluded.fixtures_lineups,
+            fixtures_statistics_fixtures = excluded.fixtures_statistics_fixtures,
+            fixtures_statistics_players = excluded.fixtures_statistics_players,
+            standings = excluded.standings,
+            players = excluded.players,
+            top_scorers = excluded.top_scorers,
+            top_assists = excluded.top_assists,
+            top_cards = excluded.top_cards,
+            injuries = excluded.injuries,
+            predictions = excluded.predictions,
+            odds = excluded.odds,
+            raw_json = excluded.raw_json,
+            updated_at = CURRENT_TIMESTAMP
+        """,
+        (
+            row.get("league_id"),
+            row.get("league_name"),
+            row.get("league_type"),
+            row.get("country"),
+            row.get("country_code"),
+            row.get("season"),
+            row.get("current"),
+            row.get("start_date"),
+            row.get("end_date"),
+            row.get("fixtures_events"),
+            row.get("fixtures_lineups"),
+            row.get("fixtures_statistics_fixtures"),
+            row.get("fixtures_statistics_players"),
+            row.get("standings"),
+            row.get("players"),
+            row.get("top_scorers"),
+            row.get("top_assists"),
+            row.get("top_cards"),
+            row.get("injuries"),
+            row.get("predictions"),
+            row.get("odds"),
+            json.dumps(row.get("raw") or {}, ensure_ascii=False),
+        ),
     )
 
 
@@ -1211,6 +1446,10 @@ def _form_score(form: str | None) -> float | None:
 
 
 def upsert_prediction_backtest(conn: sqlite3.Connection, row: dict) -> None:
+    payload = {
+        **row,
+        "competition": normalize_competition_name(row.get("competition"), str(row.get("match_date") or "")[:4]),
+    }
     conn.execute(
         """
         INSERT INTO prediction_backtests
@@ -1239,16 +1478,19 @@ def upsert_prediction_backtest(conn: sqlite3.Connection, row: dict) -> None:
             predicted_cards = excluded.predicted_cards,
             predicted_over_2_5_prob = excluded.predicted_over_2_5_prob,
             predicted_btts_prob = excluded.predicted_btts_prob,
-            actual_home_goals = excluded.actual_home_goals,
-            actual_away_goals = excluded.actual_away_goals,
-            actual_corners = excluded.actual_corners,
-            actual_shots_on_target = excluded.actual_shots_on_target,
-            actual_cards = excluded.actual_cards,
+            actual_home_goals = COALESCE(excluded.actual_home_goals, prediction_backtests.actual_home_goals),
+            actual_away_goals = COALESCE(excluded.actual_away_goals, prediction_backtests.actual_away_goals),
+            actual_corners = COALESCE(excluded.actual_corners, prediction_backtests.actual_corners),
+            actual_shots_on_target = COALESCE(excluded.actual_shots_on_target, prediction_backtests.actual_shots_on_target),
+            actual_cards = COALESCE(excluded.actual_cards, prediction_backtests.actual_cards),
             source = excluded.source,
             notes = excluded.notes,
             snapshot_json = excluded.snapshot_json
         """,
-        {**row, "snapshot_json": json.dumps(row.get("snapshot", {})) if row.get("snapshot") is not None else row.get("snapshot_json")},
+        {
+            **payload,
+            "snapshot_json": json.dumps(payload.get("snapshot", {})) if payload.get("snapshot") is not None else payload.get("snapshot_json"),
+        },
     )
 
 
@@ -1314,6 +1556,17 @@ def delete_pending_prediction_backtest(conn: sqlite3.Connection, backtest_id: in
     return int(cursor.rowcount)
 
 
+def delete_prediction_backtest(conn: sqlite3.Connection, backtest_id: int) -> int:
+    cursor = conn.execute(
+        """
+        DELETE FROM prediction_backtests
+        WHERE id = ?
+        """,
+        (backtest_id,),
+    )
+    return int(cursor.rowcount)
+
+
 def count_matches_shadowed_by_api_football(conn: sqlite3.Connection) -> int:
     return int(
         conn.execute(
@@ -1326,8 +1579,15 @@ def count_matches_shadowed_by_api_football(conn: sqlite3.Connection) -> int:
                 WHERE m.date = substr(f.date, 1, 10)
                   AND lower(m.home_team) = lower(f.home_team)
                   AND lower(m.away_team) = lower(f.away_team)
-                  AND lower(m.competition) = lower(f.league_name)
                   AND CAST(m.season AS TEXT) = CAST(f.season AS TEXT)
+                  AND (
+                    lower(m.competition) = lower(f.league_name)
+                    OR (
+                        CAST(m.season AS TEXT) = '2026'
+                        AND lower(m.competition) IN ('world cup', 'fifa world cup', 'world cup 2026')
+                        AND lower(f.league_name) IN ('world cup', 'fifa world cup', 'world cup 2026')
+                    )
+                  )
             )
             """
         ).fetchone()[0]
@@ -1346,28 +1606,602 @@ def delete_matches_shadowed_by_api_football(conn: sqlite3.Connection) -> int:
               ON m.date = substr(f.date, 1, 10)
              AND lower(m.home_team) = lower(f.home_team)
              AND lower(m.away_team) = lower(f.away_team)
-             AND lower(m.competition) = lower(f.league_name)
              AND CAST(m.season AS TEXT) = CAST(f.season AS TEXT)
+             AND (
+                lower(m.competition) = lower(f.league_name)
+                OR (
+                    CAST(m.season AS TEXT) = '2026'
+                    AND lower(m.competition) IN ('world cup', 'fifa world cup', 'world cup 2026')
+                    AND lower(f.league_name) IN ('world cup', 'fifa world cup', 'world cup 2026')
+                )
+             )
         )
         """
     )
     return conn.total_changes - before
 
 
+def actual_market_stats_for_fixture(conn: sqlite3.Connection, fixture_id: int) -> dict:
+    row = conn.execute(
+        """
+        SELECT
+            COUNT(*) AS team_rows,
+            SUM(corners) AS actual_corners,
+            SUM(shots_on_target) AS actual_shots_on_target,
+            SUM(total_shots) AS actual_total_shots,
+            SUM(fouls) AS actual_fouls,
+            SUM(passes_total) AS actual_passes,
+            SUM(
+                CASE
+                    WHEN cards_estimate IS NOT NULL THEN cards_estimate
+                    ELSE COALESCE(yellow_cards, 0) + COALESCE(red_cards, 0) * 2
+                END
+            ) AS actual_cards
+        FROM match_team_advanced_stats
+        WHERE source_match_id = ?
+        """,
+        (f"api-football:{fixture_id}",),
+    ).fetchone()
+    empty = {
+        "actual_corners": None,
+        "actual_shots_on_target": None,
+        "actual_total_shots": None,
+        "actual_fouls": None,
+        "actual_passes": None,
+        "actual_cards": None,
+        "complete": False,
+    }
+    if not row or int(row["team_rows"] or 0) < 2:
+        return empty
+    return {
+        "actual_corners": row["actual_corners"],
+        "actual_shots_on_target": row["actual_shots_on_target"],
+        "actual_total_shots": row["actual_total_shots"],
+        "actual_fouls": row["actual_fouls"],
+        "actual_passes": row["actual_passes"],
+        "actual_cards": row["actual_cards"],
+        "complete": True,
+    }
+
+
+def _prediction_value_changed(current: object, new: object) -> bool:
+    if current is None and new is None:
+        return False
+    if current is None or new is None:
+        return True
+    try:
+        return abs(float(current) - float(new)) > 1e-9
+    except (TypeError, ValueError):
+        return current != new
+
+
+def reconcile_prediction_backtests_for_fixture(conn: sqlite3.Connection, fixture_id: int) -> dict:
+    fixture = conn.execute(
+        """
+        SELECT fixture_id, date, league_name, home_team, away_team, status_short, raw_json
+        FROM api_football_fixtures
+        WHERE fixture_id = ?
+        """,
+        (fixture_id,),
+    ).fetchone()
+    if not fixture:
+        return {
+            "fixture_id": fixture_id,
+            "home_team": None,
+            "away_team": None,
+            "status": "missing_fixture",
+            "goals": {"home": None, "away": None},
+            "stats_complete": False,
+            "snapshots": 0,
+            "snapshots_updated": 0,
+            "markets_updated": [],
+            "missing_markets": ["fixture"],
+            "reason": "fixture_not_found",
+        }
+    target = str(fixture["date"] or "")[:10]
+    raw = json.loads(fixture["raw_json"] or "{}")
+    goals = raw.get("goals") or {}
+    if goals.get("home") is None or goals.get("away") is None:
+        return {
+            "fixture_id": int(fixture["fixture_id"]),
+            "home_team": fixture["home_team"],
+            "away_team": fixture["away_team"],
+            "status": fixture["status_short"],
+            "goals": {"home": None, "away": None},
+            "stats_complete": False,
+            "snapshots": 0,
+            "snapshots_updated": 0,
+            "markets_updated": [],
+            "missing_markets": ["goals"],
+            "reason": "goals_not_available",
+        }
+    market_stats = actual_market_stats_for_fixture(conn, int(fixture["fixture_id"]))
+    candidate_rows = conn.execute(
+        """
+        SELECT id, actual_home_goals, actual_away_goals, actual_corners, actual_shots_on_target, actual_cards
+             , home_team, away_team
+        FROM prediction_backtests
+        WHERE match_date = ?
+        """,
+        (target,),
+    ).fetchall()
+    aliases = _team_alias_map(conn)
+    rows = [
+        row
+        for row in candidate_rows
+        if _team_canonical(row["home_team"], aliases) == _team_canonical(fixture["home_team"], aliases)
+        and _team_canonical(row["away_team"], aliases) == _team_canonical(fixture["away_team"], aliases)
+    ]
+    markets_updated: list[str] = []
+    missing_markets: list[str] = []
+    if market_stats["complete"]:
+        for field, market_name in [
+            ("actual_corners", "corners"),
+            ("actual_shots_on_target", "shots_on_target"),
+            ("actual_cards", "cards"),
+        ]:
+            if market_stats.get(field) is None:
+                missing_markets.append(market_name)
+            else:
+                markets_updated.append(market_name)
+    else:
+        missing_markets.extend(["corners", "shots_on_target", "cards"])
+
+    updated = 0
+    for row in rows:
+        result = {
+            "actual_home_goals": int(goals["home"]),
+            "actual_away_goals": int(goals["away"]),
+            "actual_corners": row["actual_corners"],
+            "actual_shots_on_target": row["actual_shots_on_target"],
+            "actual_cards": row["actual_cards"],
+            "notes": "Resultado actualizado; pendiente de estadisticas API-Football",
+        }
+        if market_stats["complete"]:
+            result.update(
+                {
+                    "actual_corners": market_stats["actual_corners"],
+                    "actual_shots_on_target": market_stats["actual_shots_on_target"],
+                    "actual_cards": market_stats["actual_cards"],
+                    "notes": "Resultado reconciliado con estadisticas API-Football",
+                }
+            )
+        changed = any(
+            _prediction_value_changed(row[field], result[field])
+            for field in (
+                "actual_home_goals",
+                "actual_away_goals",
+                "actual_corners",
+                "actual_shots_on_target",
+                "actual_cards",
+            )
+        )
+        if changed:
+            update_prediction_backtest_result(conn, int(row["id"]), result)
+            updated += 1
+
+    return {
+        "fixture_id": int(fixture["fixture_id"]),
+        "home_team": fixture["home_team"],
+        "away_team": fixture["away_team"],
+        "status": fixture["status_short"],
+        "goals": {"home": goals.get("home"), "away": goals.get("away")},
+        "stats_complete": bool(market_stats["complete"]),
+        "corners": market_stats.get("actual_corners"),
+        "shots_on_target": market_stats.get("actual_shots_on_target"),
+        "total_shots": market_stats.get("actual_total_shots"),
+        "fouls": market_stats.get("actual_fouls"),
+        "passes": market_stats.get("actual_passes"),
+        "cards": market_stats.get("actual_cards"),
+        "snapshots": len(rows),
+        "snapshots_updated": updated,
+        "markets_updated": markets_updated,
+        "missing_markets": missing_markets,
+        "reason": None if market_stats["complete"] else "stats_pending",
+    }
+
+
+def reconcile_prediction_backtests_for_date(conn: sqlite3.Connection, target: str) -> dict:
+    fixtures = conn.execute(
+        """
+        SELECT fixture_id
+        FROM api_football_fixtures
+        WHERE substr(date, 1, 10) = ?
+          AND status_short IN ('FT', 'AET', 'PEN')
+        """,
+        (target,),
+    ).fetchall()
+    stats_pending = 0
+    snapshots_checked = 0
+    fixture_reports = []
+    for fixture in fixtures:
+        report = reconcile_prediction_backtests_for_fixture(conn, int(fixture["fixture_id"]))
+        snapshots_checked += int(report.get("snapshots") or 0)
+        stats_pending += 0 if report.get("stats_complete") else int(report.get("snapshots") or 0)
+        fixture_reports.append(report)
+    return {
+        "date": target,
+        "finished_fixtures": len(fixtures),
+        "snapshots_checked": snapshots_checked,
+        "results_updated": sum(int(report.get("snapshots_updated") or 0) for report in fixture_reports),
+        "stats_pending_snapshots": stats_pending,
+        "fixtures": fixture_reports,
+    }
+
+
+def _team_alias_map(conn: sqlite3.Connection) -> dict[str, str]:
+    aliases: dict[str, str] = {}
+    try:
+        rows = conn.execute("SELECT canonical_name, alias FROM team_name_aliases").fetchall()
+    except sqlite3.OperationalError:
+        rows = []
+    for row in rows:
+        canonical = _normalize_team_name(row["canonical_name"])
+        aliases[_normalize_team_name(row["canonical_name"])] = canonical
+        aliases[_normalize_team_name(row["alias"])] = canonical
+    return aliases
+
+
+def _team_canonical(name: str | None, aliases: dict[str, str]) -> str:
+    normalized = _normalize_team_name(name)
+    return aliases.get(normalized, normalized)
+
+
+def _normalize_team_name(name: str | None) -> str:
+    value = unicodedata.normalize("NFKD", name or "").encode("ascii", "ignore").decode("ascii")
+    value = value.lower().replace("&", " and ")
+    value = re.sub(r"[^a-z0-9]+", " ", value)
+    return re.sub(r"\s+", " ", value).strip()
+
+
 def update_prediction_backtest_result(conn: sqlite3.Connection, backtest_id: int, result: dict) -> None:
     conn.execute(
         """
         UPDATE prediction_backtests
-        SET actual_home_goals = :actual_home_goals,
-            actual_away_goals = :actual_away_goals,
-            actual_corners = :actual_corners,
-            actual_shots_on_target = :actual_shots_on_target,
-            actual_cards = :actual_cards,
+        SET actual_home_goals = COALESCE(:actual_home_goals, actual_home_goals),
+            actual_away_goals = COALESCE(:actual_away_goals, actual_away_goals),
+            actual_corners = COALESCE(:actual_corners, actual_corners),
+            actual_shots_on_target = COALESCE(:actual_shots_on_target, actual_shots_on_target),
+            actual_cards = COALESCE(:actual_cards, actual_cards),
             notes = COALESCE(:notes, notes)
         WHERE id = :id
         """,
         {**result, "id": backtest_id},
     )
+
+
+def upsert_referee(conn: sqlite3.Connection, referee: dict) -> int:
+    conn.execute(
+        """
+        INSERT INTO referees
+        (name, country, source, raw_json, updated_at)
+        VALUES (:name, :country, :source, :raw_json, CURRENT_TIMESTAMP)
+        ON CONFLICT(name, country, source) DO UPDATE SET
+            raw_json = excluded.raw_json,
+            updated_at = CURRENT_TIMESTAMP
+        """,
+        {
+            "name": referee["name"],
+            "country": referee.get("country"),
+            "source": referee.get("source", "api_football"),
+            "raw_json": json.dumps(referee.get("raw", {})),
+        },
+    )
+    row = conn.execute(
+        "SELECT id FROM referees WHERE name = ? AND COALESCE(country, '') = COALESCE(?, '') AND source = ?",
+        (referee["name"], referee.get("country"), referee.get("source", "api_football")),
+    ).fetchone()
+    return int(row["id"])
+
+
+def upsert_referee_match_history(conn: sqlite3.Connection, history: dict) -> None:
+    referee_id = upsert_referee(
+        conn,
+        {
+            "name": history["referee_name"],
+            "country": history.get("referee_country"),
+            "source": "api_football",
+            "raw": {"fixture_id": history["fixture_id"]},
+        },
+    )
+    conn.execute(
+        """
+        INSERT INTO referee_match_history
+        (fixture_id, referee_id, referee_name, referee_country, date, league_id, league_name, season, round,
+         home_team, away_team, home_yellow, away_yellow, home_red, away_red, home_cards, away_cards,
+         total_yellow, total_red, total_cards, home_fouls, away_fouls, total_fouls, penalties,
+         raw_events_json, raw_fixture_json, updated_at)
+        VALUES
+        (:fixture_id, :referee_id, :referee_name, :referee_country, :date, :league_id, :league_name, :season, :round,
+         :home_team, :away_team, :home_yellow, :away_yellow, :home_red, :away_red, :home_cards, :away_cards,
+         :total_yellow, :total_red, :total_cards, :home_fouls, :away_fouls, :total_fouls, :penalties,
+         :raw_events_json, :raw_fixture_json, CURRENT_TIMESTAMP)
+        ON CONFLICT(fixture_id) DO UPDATE SET
+            referee_id = excluded.referee_id,
+            referee_name = excluded.referee_name,
+            referee_country = excluded.referee_country,
+            date = excluded.date,
+            league_id = excluded.league_id,
+            league_name = excluded.league_name,
+            season = excluded.season,
+            round = excluded.round,
+            home_team = excluded.home_team,
+            away_team = excluded.away_team,
+            home_yellow = excluded.home_yellow,
+            away_yellow = excluded.away_yellow,
+            home_red = excluded.home_red,
+            away_red = excluded.away_red,
+            home_cards = excluded.home_cards,
+            away_cards = excluded.away_cards,
+            total_yellow = excluded.total_yellow,
+            total_red = excluded.total_red,
+            total_cards = excluded.total_cards,
+            home_fouls = excluded.home_fouls,
+            away_fouls = excluded.away_fouls,
+            total_fouls = excluded.total_fouls,
+            penalties = excluded.penalties,
+            raw_events_json = excluded.raw_events_json,
+            raw_fixture_json = excluded.raw_fixture_json,
+            updated_at = CURRENT_TIMESTAMP
+        """,
+        {
+            **history,
+            "referee_id": referee_id,
+            "raw_events_json": json.dumps(history.get("raw_events", {})),
+            "raw_fixture_json": json.dumps(history.get("raw_fixture", {})),
+        },
+    )
+    rebuild_referee_metrics(conn, referee_id)
+
+
+def rebuild_referee_metrics(conn: sqlite3.Connection, referee_id: int) -> None:
+    rows = [
+        dict(row)
+        for row in conn.execute(
+            """
+            SELECT *
+            FROM referee_match_history
+            WHERE referee_id = ? AND total_cards IS NOT NULL
+            ORDER BY date
+            """,
+            (referee_id,),
+        ).fetchall()
+    ]
+    if not rows:
+        return
+    scopes = [("global", "all", rows)]
+    for league_id in sorted({row["league_id"] for row in rows if row.get("league_id") is not None}):
+        scopes.append(("league", str(league_id), [row for row in rows if row.get("league_id") == league_id]))
+    for season in sorted({row["season"] for row in rows if row.get("season") is not None}):
+        scopes.append(("season", str(season), [row for row in rows if row.get("season") == season]))
+    global_avgs = [
+        float(row["avg_cards"])
+        for row in conn.execute(
+            """
+            SELECT referee_id, AVG(total_cards) AS avg_cards, COUNT(*) AS matches
+            FROM referee_match_history
+            WHERE total_cards IS NOT NULL
+            GROUP BY referee_id
+            HAVING matches >= 1
+            """
+        ).fetchall()
+        if row["avg_cards"] is not None
+    ]
+    for scope_type, scope_value, scope_rows in scopes:
+        metrics = _referee_metrics_from_rows(scope_rows, global_avgs)
+        conn.execute(
+            """
+            INSERT INTO referee_metrics
+            (referee_id, scope_type, scope_value, matches, avg_yellow, avg_red, avg_cards, avg_home_cards,
+             avg_away_cards, home_away_diff, avg_fouls, penalty_rate, std_cards, p25_cards, p50_cards,
+             p75_cards, last5_avg_cards, last10_avg_cards, recent_trend, consistency, strictness_percentile,
+             strictness_label, home_bias_label, away_bias_label, profile_json, updated_at)
+            VALUES
+            (:referee_id, :scope_type, :scope_value, :matches, :avg_yellow, :avg_red, :avg_cards, :avg_home_cards,
+             :avg_away_cards, :home_away_diff, :avg_fouls, :penalty_rate, :std_cards, :p25_cards, :p50_cards,
+             :p75_cards, :last5_avg_cards, :last10_avg_cards, :recent_trend, :consistency, :strictness_percentile,
+             :strictness_label, :home_bias_label, :away_bias_label, :profile_json, CURRENT_TIMESTAMP)
+            ON CONFLICT(referee_id, scope_type, scope_value) DO UPDATE SET
+                matches = excluded.matches,
+                avg_yellow = excluded.avg_yellow,
+                avg_red = excluded.avg_red,
+                avg_cards = excluded.avg_cards,
+                avg_home_cards = excluded.avg_home_cards,
+                avg_away_cards = excluded.avg_away_cards,
+                home_away_diff = excluded.home_away_diff,
+                avg_fouls = excluded.avg_fouls,
+                penalty_rate = excluded.penalty_rate,
+                std_cards = excluded.std_cards,
+                p25_cards = excluded.p25_cards,
+                p50_cards = excluded.p50_cards,
+                p75_cards = excluded.p75_cards,
+                last5_avg_cards = excluded.last5_avg_cards,
+                last10_avg_cards = excluded.last10_avg_cards,
+                recent_trend = excluded.recent_trend,
+                consistency = excluded.consistency,
+                strictness_percentile = excluded.strictness_percentile,
+                strictness_label = excluded.strictness_label,
+                home_bias_label = excluded.home_bias_label,
+                away_bias_label = excluded.away_bias_label,
+                profile_json = excluded.profile_json,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            {
+                **metrics,
+                "referee_id": referee_id,
+                "scope_type": scope_type,
+                "scope_value": scope_value,
+                "profile_json": json.dumps(metrics["profile"]),
+            },
+        )
+
+
+def rebuild_all_referee_metrics(conn: sqlite3.Connection) -> int:
+    rows = conn.execute("SELECT id FROM referees ORDER BY id").fetchall()
+    for row in rows:
+        rebuild_referee_metrics(conn, int(row["id"]))
+    return len(rows)
+
+
+def get_referee_profile_for_fixture(conn: sqlite3.Connection, fixture_id: int | None) -> dict | None:
+    if fixture_id is None:
+        return None
+    row = conn.execute(
+        """
+        SELECT h.fixture_id, h.referee_id, h.referee_name, h.referee_country, h.league_id, h.league_name, h.season,
+               m.*
+        FROM referee_match_history h
+        JOIN referee_metrics m ON m.referee_id = h.referee_id AND m.scope_type = 'global' AND m.scope_value = 'all'
+        WHERE h.fixture_id = ?
+        """,
+        (fixture_id,),
+    ).fetchone()
+    if not row:
+        fixture = conn.execute("SELECT raw_json FROM api_football_fixtures WHERE fixture_id = ?", (fixture_id,)).fetchone()
+        if not fixture:
+            return None
+        raw = json.loads(fixture["raw_json"] or "{}")
+        referee_name, referee_country = parse_referee_name((raw.get("fixture") or {}).get("referee"))
+        if not referee_name:
+            return None
+        return {"referee_name": referee_name, "referee_country": referee_country, "matches": 0, "available": False}
+    item = dict(row)
+    item["profile"] = json.loads(item.get("profile_json") or "{}")
+    item["available"] = True
+    return item
+
+
+def parse_referee_name(value: str | None) -> tuple[str | None, str | None]:
+    if not value:
+        return None, None
+    parts = [part.strip() for part in str(value).split(",") if part.strip()]
+    if not parts:
+        return None, None
+    return parts[0], parts[1] if len(parts) > 1 else None
+
+
+def _referee_metrics_from_rows(rows: list[dict], global_avgs: list[float]) -> dict:
+    cards = [float(row["total_cards"]) for row in rows if row.get("total_cards") is not None]
+    yellows = [float(row["total_yellow"]) for row in rows if row.get("total_yellow") is not None]
+    reds = [float(row["total_red"]) for row in rows if row.get("total_red") is not None]
+    home_cards = [float(row["home_cards"]) for row in rows if row.get("home_cards") is not None]
+    away_cards = [float(row["away_cards"]) for row in rows if row.get("away_cards") is not None]
+    fouls = [float(row["total_fouls"]) for row in rows if row.get("total_fouls") is not None]
+    penalties = [float(row["penalties"] or 0) for row in rows]
+    avg_cards = _mean(cards)
+    home_avg = _mean(home_cards)
+    away_avg = _mean(away_cards)
+    percentile = _percentile_rank(avg_cards, global_avgs)
+    strictness = _strictness_label(percentile)
+    home_diff = (home_avg or 0) - (away_avg or 0) if home_avg is not None and away_avg is not None else None
+    metrics = {
+        "matches": len(cards),
+        "avg_yellow": _mean(yellows),
+        "avg_red": _mean(reds),
+        "avg_cards": avg_cards,
+        "avg_home_cards": home_avg,
+        "avg_away_cards": away_avg,
+        "home_away_diff": home_diff,
+        "avg_fouls": _mean(fouls),
+        "penalty_rate": _mean(penalties),
+        "std_cards": _std(cards),
+        "p25_cards": _quantile(cards, 0.25),
+        "p50_cards": _quantile(cards, 0.50),
+        "p75_cards": _quantile(cards, 0.75),
+        "last5_avg_cards": _mean(cards[-5:]),
+        "last10_avg_cards": _mean(cards[-10:]),
+        "recent_trend": (_mean(cards[-5:]) - _mean(cards[:-5])) if len(cards) > 5 and _mean(cards[:-5]) is not None else None,
+        "consistency": _consistency(cards),
+        "strictness_percentile": percentile,
+        "strictness_label": strictness,
+        "home_bias_label": _bias_label(home_diff, "local"),
+        "away_bias_label": _bias_label(-(home_diff or 0), "visitante") if home_diff is not None else "sin muestra",
+    }
+    metrics["profile"] = {
+        "classification": strictness,
+        "card_distribution": {
+            "p25": metrics["p25_cards"],
+            "p50": metrics["p50_cards"],
+            "p75": metrics["p75_cards"],
+        },
+        "recent": {
+            "last5_avg_cards": metrics["last5_avg_cards"],
+            "last10_avg_cards": metrics["last10_avg_cards"],
+            "trend": metrics["recent_trend"],
+        },
+        "bias": {
+            "home_away_diff": metrics["home_away_diff"],
+            "home_label": metrics["home_bias_label"],
+            "away_label": metrics["away_bias_label"],
+        },
+    }
+    return {key: (round(value, 4) if isinstance(value, float) else value) for key, value in metrics.items()}
+
+
+def _mean(values: list[float]) -> float | None:
+    clean = [float(value) for value in values if value is not None]
+    return sum(clean) / len(clean) if clean else None
+
+
+def _std(values: list[float]) -> float | None:
+    clean = [float(value) for value in values if value is not None]
+    if len(clean) < 2:
+        return 0.0 if clean else None
+    mean = sum(clean) / len(clean)
+    return (sum((value - mean) ** 2 for value in clean) / (len(clean) - 1)) ** 0.5
+
+
+def _quantile(values: list[float], q: float) -> float | None:
+    clean = sorted(float(value) for value in values if value is not None)
+    if not clean:
+        return None
+    pos = (len(clean) - 1) * q
+    lower = int(pos)
+    upper = min(lower + 1, len(clean) - 1)
+    frac = pos - lower
+    return clean[lower] * (1 - frac) + clean[upper] * frac
+
+
+def _consistency(values: list[float]) -> float | None:
+    mean = _mean(values)
+    std = _std(values)
+    if mean is None or std is None:
+        return None
+    if mean == 0:
+        return 1.0 if std == 0 else 0.0
+    return max(0.0, min(1.0, 1 - (std / mean)))
+
+
+def _percentile_rank(value: float | None, distribution: list[float]) -> float | None:
+    clean = sorted(float(item) for item in distribution if item is not None)
+    if value is None or not clean:
+        return None
+    below = sum(1 for item in clean if item <= value)
+    return below / len(clean)
+
+
+def _strictness_label(percentile: float | None) -> str:
+    if percentile is None:
+        return "sin muestra suficiente"
+    if percentile <= 0.2:
+        return "muy permisivo"
+    if percentile <= 0.4:
+        return "permisivo"
+    if percentile <= 0.6:
+        return "neutral"
+    if percentile <= 0.8:
+        return "estricto"
+    return "muy estricto"
+
+
+def _bias_label(diff: float | None, side: str) -> str:
+    if diff is None:
+        return "sin muestra"
+    if diff > 0:
+        return f"mas tarjetas al {side}"
+    if diff < 0:
+        return f"menos tarjetas al {side}"
+    return "neutral"
 
 
 def upsert_competition(conn: sqlite3.Connection, competition: dict, season: int | None = None) -> None:

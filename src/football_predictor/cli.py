@@ -13,6 +13,7 @@ from football_predictor.data.api_football_sync import (
     sync_api_football_standings,
     sync_api_football_team_statistics,
     sync_api_football_players,
+    sync_api_football_league_coverage,
     sync_api_football_fixture_details_bulk,
     sync_competition_season_core,
     sync_api_football_fixture_details_by_id,
@@ -24,6 +25,8 @@ from football_predictor.data.fifa_rankings import fetch_fifa_mens_rankings
 from football_predictor.data.international_history import download_international_results, load_international_results
 from football_predictor.data.loaders import load_matches_csv
 from football_predictor.data.quality_plan import alias_rows, requirement_rows
+from football_predictor.data.mass_sync import run_mass_api_football_sync
+from football_predictor.data.pending_reconciliation import run_pending_fixture_reconciliation
 from football_predictor.data.worldcup_enriched import (
     download_worldcup_enriched,
     load_worldcup_enriched,
@@ -61,6 +64,7 @@ from football_predictor.database.db import (
     upsert_competition,
     list_competitions,
     insert_daily_job,
+    reconcile_prediction_backtests_for_date,
     list_sync_inventory,
     upsert_team_alias,
     upsert_data_source_requirement,
@@ -490,61 +494,46 @@ def update_results_from_fixtures(
 
     target = date or date_type.today().isoformat()
     init_db(db_path)
-    updated = 0
     with connect(db_path) as conn:
-        fixtures = conn.execute(
-            """
-            SELECT date, league_name, home_team, away_team, status_short, raw_json
-            FROM api_football_fixtures
-            WHERE substr(date, 1, 10) = ?
-              AND status_short IN ('FT', 'AET', 'PEN')
-            """,
-            (target,),
-        ).fetchall()
-        for fixture in fixtures:
-            raw = json.loads(fixture["raw_json"] or "{}")
-            goals = raw.get("goals") or {}
-            if goals.get("home") is None or goals.get("away") is None:
-                continue
-            rows = conn.execute(
-                """
-                SELECT id
-                FROM prediction_backtests
-                WHERE match_date = ?
-                  AND home_team = ?
-                  AND away_team = ?
-                  AND (actual_home_goals IS NULL OR actual_away_goals IS NULL)
-                """,
-                (target, fixture["home_team"], fixture["away_team"]),
-            ).fetchall()
-            for row in rows:
-                update_prediction_backtest_result(
-                    conn,
-                    int(row["id"]),
-                    {
-                        "actual_home_goals": int(goals["home"]),
-                        "actual_away_goals": int(goals["away"]),
-                        "actual_corners": None,
-                        "actual_shots_on_target": None,
-                        "actual_cards": None,
-                        "notes": "Resultado actualizado desde fixture local",
-                    },
-                )
-                updated += 1
+        result = reconcile_prediction_backtests_for_date(conn, target)
         insert_daily_job(
             conn,
             {
                 "job_date": target,
                 "competition": "all",
                 "status": "results_updated",
-                "fixtures_found": len(fixtures),
+                "fixtures_found": result["finished_fixtures"],
                 "predictions_created": 0,
-                "results_updated": updated,
+                "results_updated": result["results_updated"],
                 "errors": [],
             },
         )
         conn.commit()
-    typer.echo(json.dumps({"date": target, "finished_fixtures": len(fixtures), "results_updated": updated}, indent=2))
+    typer.echo(json.dumps(result, indent=2))
+
+
+@app.command("rescue-pending-results")
+def rescue_pending_results(
+    sync_api: bool = typer.Option(True, help="Consultar API-Football para fixtures pendientes."),
+    max_fixtures: int = typer.Option(100, min=1, max=500, help="Maximo de fixtures pendientes a procesar."),
+    retry_hours: int = typer.Option(6, min=1, max=48, help="Horas antes de reintentar fixtures sin stats."),
+    league: int | None = typer.Option(None, help="Opcional: limitar a una liga/competicion."),
+    season: int | None = typer.Option(None, help="Opcional: limitar a temporada API-Football."),
+    db_path: Path = settings.db_path,
+) -> None:
+    init_db(db_path)
+    with connect(db_path) as conn:
+        result = run_pending_fixture_reconciliation(
+            conn,
+            client=ApiFootballClient() if sync_api else None,
+            sync_api=sync_api,
+            max_fixtures=max_fixtures,
+            retry_hours=retry_hours,
+            league=league,
+            season=season,
+        )
+        conn.commit()
+    typer.echo(json.dumps(result, indent=2))
 
 
 @app.command("show-teams")
@@ -615,6 +604,33 @@ def sync_api_fixtures(
     client = ApiFootballClient()
     with connect(db_path) as conn:
         result = sync_api_football_fixtures(conn, client, league=league, season=season)
+        conn.commit()
+    typer.echo(json.dumps(result, indent=2))
+
+
+@app.command("sync-api-football-coverage")
+def sync_api_coverage(
+    league: list[int] | None = typer.Option(None, "--league", help="ID de liga/competicion. Puede repetirse."),
+    season: int | None = typer.Option(None, help="Temporada opcional."),
+    search: str | None = typer.Option(None, help="Buscar ligas por texto si no se pasa --league."),
+    country: str | None = typer.Option(None, help="Filtrar por pais si no se pasa --league."),
+    catalog: bool = typer.Option(True, help="Usar catalogo local de competiciones prioritarias si no se pasa --league/search/country."),
+    db_path: Path = settings.db_path,
+) -> None:
+    init_db(db_path)
+    client = ApiFootballClient()
+    league_ids = league
+    if not league_ids and catalog and not search and not country:
+        league_ids = [int(item["api_football_league_id"]) for item in COMPETITIONS if item.get("api_football_league_id")]
+    with connect(db_path) as conn:
+        result = sync_api_football_league_coverage(
+            conn,
+            client,
+            league_ids=league_ids,
+            season=season,
+            search=search,
+            country=country,
+        )
         conn.commit()
     typer.echo(json.dumps(result, indent=2))
 
@@ -697,6 +713,8 @@ def sync_api_today(
     date: str | None = typer.Option(None, help="Fecha YYYY-MM-DD. Por defecto usa hoy."),
     league: int | None = typer.Option(None, help="Opcional: limitar a una liga/competicion."),
     season: int | None = typer.Option(None, help="Opcional: temporada de API-Football."),
+    max_finished_details: int = typer.Option(50, min=0, max=200, help="Maximo de fixtures terminados a enriquecer."),
+    skip_finished_details: bool = typer.Option(False, help="Solo sincronizar fixtures/resultados, sin stats completas."),
     db_path: Path = settings.db_path,
 ) -> None:
     from datetime import date as date_type
@@ -705,7 +723,17 @@ def sync_api_today(
     init_db(db_path)
     client = ApiFootballClient()
     with connect(db_path) as conn:
-        result = sync_api_football_fixtures_by_date(conn, client, date=target, league=league, season=season)
+        result = sync_api_football_fixtures_by_date(
+            conn,
+            client,
+            date=target,
+            league=league,
+            season=season,
+            sync_finished_details=not skip_finished_details,
+            max_finished_details=max_finished_details,
+        )
+        reconciliation = reconcile_prediction_backtests_for_date(conn, target)
+        result["reconciliation"] = reconciliation
         insert_daily_job(
             conn,
             {
@@ -714,7 +742,7 @@ def sync_api_today(
                 "status": "api_football_synced",
                 "fixtures_found": result["fixtures"],
                 "predictions_created": 0,
-                "results_updated": result["finished_matches_inserted"],
+                "results_updated": reconciliation["results_updated"],
                 "errors": result.get("api_errors") or {},
             },
         )
@@ -854,6 +882,45 @@ def sync_api_fixture_details_bulk(
             only_finished=not include_unfinished,
             missing_only=not force,
             max_fixtures=max_fixtures,
+        )
+        conn.commit()
+    typer.echo(json.dumps(result, indent=2))
+
+
+@app.command("sync-api-football-massive")
+def sync_api_football_massive(
+    request_budget: int = typer.Option(1500, min=1, max=7500, help="Presupuesto estimado de requests."),
+    seasons_per_league: int = typer.Option(2, min=1, max=5, help="Temporadas por liga segun API-Football."),
+    max_competitions: int | None = typer.Option(None, min=1, help="Limitar numero de competiciones prioritarias."),
+    league_id: list[int] | None = typer.Option(None, "--league-id", help="Procesar solo estos IDs de liga API-Football."),
+    max_fixture_details_per_season: int = typer.Option(80, min=0, max=500, help="Maximo de fixtures caros por liga/temporada."),
+    player_request_share: float = typer.Option(0.35, min=0.0, max=1.0, help="Fraccion del presupuesto de cada temporada para jugadores."),
+    db_path: Path = settings.db_path,
+) -> None:
+    init_db(db_path)
+    client = ApiFootballClient()
+
+    def progress(event: dict) -> None:
+        typer.echo(
+            "[api-football] "
+            f"{event.get('league_name') or event.get('league_id')} "
+            f"{event.get('season') or ''} "
+            f"{event['endpoint']}={event['status']} "
+            f"used={event.get('requests_used')} "
+            f"remaining={event.get('remaining_budget')}"
+        )
+
+    with connect(db_path) as conn:
+        result = run_mass_api_football_sync(
+            conn,
+            client,
+            request_budget=request_budget,
+            seasons_per_league=seasons_per_league,
+            max_competitions=max_competitions,
+            league_ids=league_id,
+            max_fixture_details_per_season=max_fixture_details_per_season,
+            player_request_share=player_request_share,
+            progress=progress,
         )
         conn.commit()
     typer.echo(json.dumps(result, indent=2))

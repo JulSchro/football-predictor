@@ -19,6 +19,7 @@ from football_predictor.data.api_football_sync import (
 )
 from football_predictor.data.competitions import competition_catalog
 from football_predictor.data.coverage import data_coverage
+from football_predictor.data.pending_reconciliation import run_pending_fixture_reconciliation
 from football_predictor.database.db import (
     advanced_summary_by_team,
     api_lineup_summary_by_team,
@@ -27,6 +28,7 @@ from football_predictor.database.db import (
     availability_summary_by_team,
     player_quality_summary_by_team,
     connect,
+    delete_prediction_backtest,
     delete_pending_prediction_backtest,
     get_match_context,
     get_team_external_metrics,
@@ -41,6 +43,7 @@ from football_predictor.database.db import (
     list_prediction_backtests,
     list_teams,
     list_venues,
+    reconcile_prediction_backtests_for_date,
     update_prediction_backtest_result,
     upsert_prediction_backtest,
 )
@@ -49,7 +52,10 @@ from football_predictor.evaluation.prediction_backtest import add_evaluation, co
 from football_predictor.prediction.factor_model import build_team_profile
 from football_predictor.prediction.calibration import apply_market_calibration
 from football_predictor.prediction.markets import estimate_secondary_markets
+from football_predictor.prediction.monte_carlo import simulate_market_distributions
+from football_predictor.prediction.pick_engine import generate_betting_picks, generate_pick_report
 from football_predictor.prediction.player_markets import estimate_player_markets
+from football_predictor.prediction.referee_model import referee_card_profile
 from football_predictor.prediction.predictor import MatchPredictor
 from football_predictor.prediction.simulator import simulate_advanced_match, simulate_fixture_list, simulate_match
 
@@ -67,6 +73,61 @@ def _market_error(predicted: float | None, actual: float | None) -> dict | None:
     }
 
 
+def _prediction_lifecycle(row: dict) -> dict:
+    has_score = row.get("actual_home_goals") is not None and row.get("actual_away_goals") is not None
+    market_fields = {
+        "corners": row.get("actual_corners"),
+        "shots_on_target": row.get("actual_shots_on_target"),
+        "cards": row.get("actual_cards"),
+    }
+    missing_markets = [name for name, value in market_fields.items() if value is None]
+    match_date = str(row.get("match_date") or "")[:10]
+    is_past = False
+    try:
+        is_past = bool(match_date) and date.fromisoformat(match_date) < date.today()
+    except ValueError:
+        is_past = False
+    if has_score and not missing_markets:
+        lifecycle_status = "stats_complete"
+        label = "Stats completas"
+    elif has_score:
+        lifecycle_status = "score_updated"
+        label = "Marcador actualizado"
+    elif is_past:
+        lifecycle_status = "result_late"
+        label = "Resultado pendiente atrasado"
+    else:
+        lifecycle_status = "awaiting_result"
+        label = "Esperando resultado"
+    return {
+        "status": "evaluated" if has_score else "pending",
+        "lifecycle_status": lifecycle_status,
+        "lifecycle_label": label,
+        "missing_actuals": ([] if has_score else ["score"]) + ([] if not has_score else missing_markets),
+        "is_limbo": lifecycle_status == "result_late" or (has_score and bool(missing_markets)),
+    }
+
+
+def _with_prediction_lifecycle(rows: list[dict]) -> list[dict]:
+    items = []
+    for row in rows:
+        item = dict(row)
+        item.update(_prediction_lifecycle(item))
+        items.append(item)
+    return items
+
+
+def _value_changed(current: object, new: object) -> bool:
+    if current is None and new is None:
+        return False
+    if current is None or new is None:
+        return True
+    try:
+        return abs(float(current) - float(new)) > 1e-9
+    except (TypeError, ValueError):
+        return current != new
+
+
 def _snapshot_payload(
     prediction: dict,
     simulation: dict,
@@ -76,6 +137,8 @@ def _snapshot_payload(
     fixture: dict | None = None,
     betting_picks: list[dict] | None = None,
     player_markets: dict | None = None,
+    market_distribution: dict | None = None,
+    pick_report: dict | None = None,
 ) -> dict:
     return {
         "schema_version": 1,
@@ -93,10 +156,12 @@ def _snapshot_payload(
             "profiles": simulation.get("profiles"),
         },
         "secondary_markets": markets,
+        "market_distribution": market_distribution or {},
         "match_context": match_context,
         "data_quality": data_quality,
         "fixture": fixture,
         "betting_picks": betting_picks or [],
+        "pick_report": pick_report or {},
         "player_markets": player_markets or {},
     }
 
@@ -124,7 +189,43 @@ def _betting_picks(
     over_2_5_prob: float,
     btts_prob: float,
     markets: dict,
+    market_distribution: dict | None = None,
 ) -> list[dict]:
+    return generate_betting_picks(
+        home_team,
+        away_team,
+        home_prob,
+        draw_prob,
+        away_prob,
+        over_2_5_prob,
+        btts_prob,
+        markets,
+        market_distribution,
+    )
+
+
+def _betting_pick_report(
+    home_team: str,
+    away_team: str,
+    home_prob: float,
+    draw_prob: float,
+    away_prob: float,
+    over_2_5_prob: float,
+    btts_prob: float,
+    markets: dict,
+    market_distribution: dict | None = None,
+) -> dict:
+    return generate_pick_report(
+        home_team,
+        away_team,
+        home_prob,
+        draw_prob,
+        away_prob,
+        over_2_5_prob,
+        btts_prob,
+        markets,
+        market_distribution,
+    )
     outcomes = [
         ("home", home_team, float(home_prob)),
         ("draw", "Empate", float(draw_prob)),
@@ -162,6 +263,31 @@ def _betting_picks(
     cards_prob = markets.get("over_3_5_cards_prob")
     if cards_prob is not None and float(cards_prob) >= 0.56:
         picks.append({"market": "Tarjetas", "pick": "Over 3.5", "probability": round(float(cards_prob), 4), "confidence": _confidence_label(float(cards_prob), 0.08), "risk": "alto"})
+    team_markets = markets.get("team_markets") or {}
+    for side, label in (("home", home_team), ("away", away_team)):
+        team = team_markets.get(side) or {}
+        corners_team_prob = team.get("over_3_5_corners_prob")
+        if corners_team_prob is not None and float(corners_team_prob) >= 0.58:
+            picks.append(
+                {
+                    "market": f"Corners {label}",
+                    "pick": "Over 3.5",
+                    "probability": round(float(corners_team_prob), 4),
+                    "confidence": _confidence_label(float(corners_team_prob), 0.08),
+                    "risk": "medio",
+                }
+            )
+        shots_team_prob = team.get("over_3_5_shots_on_target_prob")
+        if shots_team_prob is not None and float(shots_team_prob) >= 0.58:
+            picks.append(
+                {
+                    "market": f"Tiros puerta {label}",
+                    "pick": "Over 3.5",
+                    "probability": round(float(shots_team_prob), 4),
+                    "confidence": _confidence_label(float(shots_team_prob), 0.08),
+                    "risk": "medio",
+                }
+            )
     return sorted(picks, key=lambda item: item["probability"], reverse=True)[:5]
 
 
@@ -266,6 +392,16 @@ def create_app(db_path: Path | str | None = None) -> FastAPI:
                 return estimate_player_markets(conn, home_team, away_team, markets)
 
         return cached(f"player_markets:{'|'.join(key_parts)}", 60, factory)
+
+    def load_referee_profile(fixture_id: int | None) -> dict | None:
+        if fixture_id is None:
+            return None
+
+        def factory() -> dict | None:
+            with connect(resolved_db_path) as conn:
+                return referee_card_profile(conn, fixture_id)
+
+        return cached(f"referee_profile:{fixture_id}", 60, factory)
 
     def load_prediction_backtest_metrics(limit: int = 500) -> dict:
         def factory() -> dict:
@@ -422,14 +558,21 @@ def create_app(db_path: Path | str | None = None) -> FastAPI:
                     skipped += 1
                     snapshots.append({"home_team": home, "away_team": away, "error": str(exc)})
                     continue
-                markets = apply_market_calibration(estimate_secondary_markets(advanced_stats, home, away), existing_metrics)
+                referee_profile = referee_card_profile(conn, int(fixture["fixture_id"])) if fixture.get("fixture_id") else None
+                markets = apply_market_calibration(estimate_secondary_markets(advanced_stats, home, away, referee_profile), existing_metrics)
+                market_distribution = simulate_market_distributions(
+                    prediction,
+                    markets,
+                    simulations=simulations,
+                    match_context=match_context,
+                )
                 player_markets = estimate_player_markets(conn, home, away, markets)
                 simulated_probs = simulation.get("simulation", {})
                 home_prob = simulated_probs.get("home_win", prediction["home_win_prob"])
                 draw_prob = simulated_probs.get("draw", prediction["draw_prob"])
                 away_prob = simulated_probs.get("away_win", prediction["away_win_prob"])
                 probs = {"home": home_prob, "draw": draw_prob, "away": away_prob}
-                betting_picks = _betting_picks(
+                pick_report = _betting_pick_report(
                     home,
                     away,
                     home_prob,
@@ -438,7 +581,9 @@ def create_app(db_path: Path | str | None = None) -> FastAPI:
                     prediction["over_2_5_prob"],
                     prediction["both_teams_score_prob"],
                     markets,
+                    market_distribution,
                 )
+                betting_picks = pick_report["recommended"]
                 row = {
                     "match_date": match_date,
                     "competition": fixture["league_name"] or "Unknown",
@@ -470,11 +615,13 @@ def create_app(db_path: Path | str | None = None) -> FastAPI:
                         quality_snapshot,
                         fixture=fixture,
                         betting_picks=betting_picks,
+                        pick_report=pick_report,
                         player_markets=player_markets,
+                        market_distribution=market_distribution,
                     ),
                 }
                 upsert_prediction_backtest(conn, row)
-                snapshots.append({**row, "context": (match_context or {}).get("stage_label"), "betting_picks": betting_picks, "player_markets": player_markets})
+                snapshots.append({**row, "context": (match_context or {}).get("stage_label"), "betting_picks": betting_picks, "pick_report": pick_report, "player_markets": player_markets, "market_distribution": market_distribution})
                 created += 1
             insert_daily_job(
                 conn,
@@ -496,6 +643,7 @@ def create_app(db_path: Path | str | None = None) -> FastAPI:
         row = conn.execute(
             """
             SELECT
+                COUNT(*) AS team_rows,
                 SUM(corners) AS actual_corners,
                 SUM(shots_on_target) AS actual_shots_on_target,
                 SUM(
@@ -509,140 +657,86 @@ def create_app(db_path: Path | str | None = None) -> FastAPI:
             """,
             (f"api-football:{fixture_id}",),
         ).fetchone()
-        if not row:
-            return {"actual_corners": None, "actual_shots_on_target": None, "actual_cards": None}
+        empty = {"actual_corners": None, "actual_shots_on_target": None, "actual_cards": None}
+        if not row or row["team_rows"] < 2:
+            return {**empty, "complete": False}
         return {
             "actual_corners": row["actual_corners"],
             "actual_shots_on_target": row["actual_shots_on_target"],
             "actual_cards": row["actual_cards"],
+            "complete": True,
         }
 
     def update_results_from_local_fixtures(target: str) -> dict:
         init_db(resolved_db_path)
-        updated = 0
         with connect(resolved_db_path) as conn:
-            fixtures = conn.execute(
-                """
-                SELECT fixture_id, date, league_name, home_team, away_team, status_short, raw_json
-                FROM api_football_fixtures
-                WHERE substr(date, 1, 10) = ?
-                  AND status_short IN ('FT', 'AET', 'PEN')
-                """,
-                (target,),
-            ).fetchall()
-            for fixture in fixtures:
-                raw = json.loads(fixture["raw_json"] or "{}")
-                goals = raw.get("goals") or {}
-                if goals.get("home") is None or goals.get("away") is None:
-                    continue
-                market_stats = actual_market_stats_for_fixture(conn, int(fixture["fixture_id"]))
-                rows = conn.execute(
-                    """
-                    SELECT id
-                    FROM prediction_backtests
-                    WHERE match_date = ?
-                      AND home_team = ?
-                      AND away_team = ?
-                      AND (actual_home_goals IS NULL OR actual_away_goals IS NULL)
-                    """,
-                    (target, fixture["home_team"], fixture["away_team"]),
-                ).fetchall()
-                for row in rows:
-                    update_prediction_backtest_result(
-                        conn,
-                        int(row["id"]),
-                        {
-                            "actual_home_goals": int(goals["home"]),
-                            "actual_away_goals": int(goals["away"]),
-                            **market_stats,
-                            "notes": "Resultado actualizado desde fixture local/API",
-                        },
-                    )
-                    updated += 1
+            result = reconcile_prediction_backtests_for_date(conn, target)
             insert_daily_job(
                 conn,
                 {
                     "job_date": target,
                     "competition": "all",
                     "status": "results_updated",
-                    "fixtures_found": len(fixtures),
+                    "fixtures_found": result["finished_fixtures"],
                     "predictions_created": 0,
-                    "results_updated": updated,
+                    "results_updated": result["results_updated"],
                     "errors": [],
                 },
             )
             conn.commit()
             clear_cache()
             metrics = compute_backtest_metrics(list_prediction_backtests(conn, limit=500))
-        return {"date": target, "finished_fixtures": len(fixtures), "results_updated": updated, "metrics": {key: value for key, value in metrics.items() if key != "rows"}}
+        return {**result, "metrics": {key: value for key, value in metrics.items() if key != "rows"}}
 
     def reconcile_pending_results(
         max_dates: int = 7,
         sync_api: bool = False,
         league: int | None = None,
         season: int | None = None,
+        max_fixtures: int = 100,
+        retry_hours: int = 6,
     ) -> dict:
         init_db(resolved_db_path)
-        today = date.today().isoformat()
         with connect(resolved_db_path) as conn:
-            pending_before = conn.execute(
-                """
-                SELECT COUNT(*)
-                FROM prediction_backtests
-                WHERE (actual_home_goals IS NULL OR actual_away_goals IS NULL)
-                  AND match_date <= ?
-                """,
-                (today,),
-            ).fetchone()[0]
-            rows = conn.execute(
-                """
-                SELECT DISTINCT match_date
-                FROM prediction_backtests
-                WHERE (actual_home_goals IS NULL OR actual_away_goals IS NULL)
-                  AND match_date <= ?
-                ORDER BY match_date ASC
-                LIMIT ?
-                """,
-                (today, max(1, max_dates)),
-            ).fetchall()
-        sync_results = []
-        update_results = []
-        if sync_api:
-            client = ApiFootballClient()
-        for row in rows:
-            target = str(row["match_date"])
-            if sync_api:
-                with connect(resolved_db_path) as conn:
-                    synced = sync_api_football_fixtures_by_date(conn, client, date=target, league=league, season=season)
-                    conn.commit()
-                    clear_cache()
-                sync_results.append({"date": target, **synced})
-            update_results.append(update_results_from_local_fixtures(target))
-        with connect(resolved_db_path) as conn:
-            pending_after = conn.execute(
-                """
-                SELECT COUNT(*)
-                FROM prediction_backtests
-                WHERE (actual_home_goals IS NULL OR actual_away_goals IS NULL)
-                  AND match_date <= ?
-                """,
-                (today,),
-            ).fetchone()[0]
-        return {
-            "dates_checked": [str(row["match_date"]) for row in rows],
-            "pending_before": int(pending_before),
-            "pending_after": int(pending_after),
-            "results_updated": sum(int(result.get("results_updated", 0)) for result in update_results),
-            "sync_api": sync_api,
-            "sync_results": sync_results,
-            "updates": update_results,
-        }
+            result = run_pending_fixture_reconciliation(
+                conn,
+                client=ApiFootballClient() if sync_api else None,
+                sync_api=sync_api,
+                max_fixtures=max_fixtures,
+                retry_hours=retry_hours,
+                league=league,
+                season=season,
+            )
+            insert_daily_job(
+                conn,
+                {
+                    "job_date": date.today().isoformat(),
+                    "competition": str(league or "all"),
+                    "status": "pending_fixture_reconciliation",
+                    "fixtures_found": result["fixtures_pending_found"],
+                    "predictions_created": 0,
+                    "results_updated": result["snapshots_updated"],
+                    "errors": result.get("remaining_finished_pending", []),
+                },
+            )
+            conn.commit()
+            clear_cache()
+        result["max_dates_legacy"] = max_dates
+        result["sync_api"] = sync_api
+        return result
 
     static_dir = Path(__file__).with_name("static")
 
     @app.get("/")
     def index() -> FileResponse:
         return FileResponse(static_dir / "index.html")
+
+    @app.get("/health")
+    def health() -> dict:
+        init_db(resolved_db_path)
+        with connect(resolved_db_path) as conn:
+            conn.execute("SELECT 1").fetchone()
+        return {"status": "ok"}
 
     @app.get("/styles.css")
     def styles() -> FileResponse:
@@ -720,15 +814,6 @@ def create_app(db_path: Path | str | None = None) -> FastAPI:
                                0 AS upcoming,
                                'historical' AS source
                         FROM matches
-                        WHERE NOT EXISTS (
-                            SELECT 1
-                            FROM api_football_fixtures f
-                            WHERE matches.date = substr(f.date, 1, 10)
-                              AND lower(matches.home_team) = lower(f.home_team)
-                              AND lower(matches.away_team) = lower(f.away_team)
-                              AND lower(matches.competition) = lower(f.league_name)
-                              AND CAST(matches.season AS TEXT) = CAST(f.season AS TEXT)
-                        )
                         UNION ALL
                         SELECT league_name AS competition, CAST(season AS TEXT) AS season, substr(date, 1, 10) AS match_date,
                                CASE WHEN status_short IN ('FT', 'AET', 'PEN') THEN 1 ELSE 0 END AS finished,
@@ -755,6 +840,64 @@ def create_app(db_path: Path | str | None = None) -> FastAPI:
 
         return cached("data_explorer_competitions", 60, factory)
 
+    @app.get("/api/data-explorer/overview")
+    def data_explorer_overview() -> dict:
+        def factory() -> dict:
+            init_db(resolved_db_path)
+            with connect(resolved_db_path) as conn:
+                row = conn.execute(
+                    """
+                    SELECT
+                        (SELECT COUNT(DISTINCT competition) FROM matches WHERE competition IS NOT NULL) AS historical_competitions,
+                        (SELECT COUNT(DISTINCT league_name) FROM api_football_fixtures WHERE league_name IS NOT NULL) AS api_competitions,
+                        (SELECT COUNT(*) FROM api_football_fixtures) AS api_fixtures,
+                        (SELECT COUNT(*) FROM matches) AS historical_matches,
+                        (SELECT COUNT(*) FROM teams) AS teams,
+                        (SELECT COUNT(*) FROM players) AS players,
+                        (SELECT COUNT(*) FROM venues) AS venues,
+                        (SELECT COUNT(*) FROM referees) AS referees,
+                        (SELECT COUNT(*) FROM player_season_stats) AS player_stats,
+                        (SELECT COUNT(*) FROM player_match_stats) AS player_match_stats,
+                        (SELECT COUNT(*) FROM match_team_advanced_stats) AS advanced_stats,
+                        (SELECT COUNT(*) FROM api_football_fixture_lineups) AS fixture_lineups,
+                        (SELECT COUNT(*) FROM api_football_league_coverage) AS league_coverage,
+                        (SELECT COUNT(*) FROM prediction_backtests) AS predictions,
+                        (
+                            SELECT MAX(sync_marker)
+                            FROM (
+                                SELECT MAX(date) AS sync_marker FROM api_football_fixtures
+                                UNION ALL SELECT MAX(updated_at) FROM player_season_stats
+                                UNION ALL SELECT MAX(updated_at) FROM api_football_league_coverage
+                                UNION ALL SELECT MAX(created_at) FROM daily_jobs
+                            )
+                        ) AS last_sync
+                    """
+                ).fetchone()
+                coverage_rows = conn.execute(
+                    """
+                    SELECT league_id, league_name, country, season, current,
+                           fixtures_events, fixtures_lineups, fixtures_statistics_fixtures,
+                           fixtures_statistics_players, standings, players, injuries,
+                           predictions, odds, updated_at
+                    FROM api_football_league_coverage
+                    ORDER BY current DESC, updated_at DESC, league_name
+                    LIMIT 80
+                    """
+                ).fetchall()
+            payload = dict(row)
+            payload["total_competitions"] = max(payload["historical_competitions"], payload["api_competitions"])
+            payload["total_matches"] = payload["historical_matches"] + payload["api_fixtures"]
+            payload["stored_statistics"] = (
+                payload["player_stats"]
+                + payload["player_match_stats"]
+                + payload["advanced_stats"]
+                + payload["fixture_lineups"]
+            )
+            payload["coverage"] = [dict(item) for item in coverage_rows]
+            return payload
+
+        return cached("data_explorer_overview", 60, factory)
+
     @app.get("/api/data-explorer/fixtures")
     def data_explorer_fixtures(
         search: str | None = Query(default=None),
@@ -764,65 +907,58 @@ def create_app(db_path: Path | str | None = None) -> FastAPI:
         date_to: str | None = Query(default=None),
         limit: int = Query(default=100, ge=1, le=300),
     ) -> dict:
-        clauses = []
-        params: list[str | int] = []
+        api_clauses = []
+        api_params: list[str | int] = []
+        historical_clauses = []
+        historical_params: list[str | int] = []
         if search:
-            clauses.append("(home_team LIKE ? OR away_team LIKE ? OR competition LIKE ? OR venue_name LIKE ?)")
             term = f"%{search}%"
-            params.extend([term, term, term, term])
+            api_clauses.append("(home_team LIKE ? OR away_team LIKE ? OR league_name LIKE ? OR venue_name LIKE ? OR CAST(fixture_id AS TEXT) LIKE ?)")
+            api_params.extend([term, term, term, term, term])
+            historical_clauses.append("(home_team LIKE ? OR away_team LIKE ? OR competition LIKE ? OR CAST(id AS TEXT) LIKE ?)")
+            historical_params.extend([term, term, term, term])
         if competition:
-            clauses.append("competition = ?")
-            params.append(competition)
+            api_clauses.append("league_name = ?")
+            api_params.append(competition)
+            historical_clauses.append("competition = ?")
+            historical_params.append(competition)
         if status and status != "all":
             if status == "finished":
-                clauses.append("status_group = 'finished'")
+                api_clauses.append("status_short IN ('FT', 'AET', 'PEN')")
+                historical_clauses.append("home_goals IS NOT NULL AND away_goals IS NOT NULL")
             elif status == "upcoming":
-                clauses.append("status_group = 'upcoming'")
+                api_clauses.append("status_short NOT IN ('FT', 'AET', 'PEN', 'CANC', 'PST')")
+                historical_clauses.append("1 = 0")
             elif status == "live":
-                clauses.append("status_group = 'live'")
+                api_clauses.append("status_short IN ('1H', 'HT', '2H', 'ET', 'BT', 'P', 'SUSP', 'INT')")
+                historical_clauses.append("1 = 0")
             else:
-                clauses.append("status = ?")
-                params.append(status)
+                api_clauses.append("status_short = ?")
+                api_params.append(status)
+                historical_clauses.append("1 = 0")
         if date_from:
-            clauses.append("match_date >= ?")
-            params.append(date_from)
+            api_clauses.append("substr(date, 1, 10) >= ?")
+            api_params.append(date_from)
+            historical_clauses.append("date >= ?")
+            historical_params.append(date_from)
         if date_to:
-            clauses.append("match_date <= ?")
-            params.append(date_to)
+            api_clauses.append("substr(date, 1, 10) <= ?")
+            api_params.append(date_to)
+            historical_clauses.append("date <= ?")
+            historical_params.append(date_to)
 
-        where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-        query = f"""
-            WITH combined AS (
-                SELECT CAST(id AS TEXT) AS id,
-                       date AS match_date,
-                       competition AS competition,
-                       season AS season,
-                       home_team AS home_team,
-                       away_team AS away_team,
-                       CASE WHEN home_goals IS NULL OR away_goals IS NULL THEN NULL ELSE home_goals || '-' || away_goals END AS score,
-                       CASE WHEN home_goals IS NOT NULL AND away_goals IS NOT NULL THEN 'FT' ELSE 'HIST' END AS status,
-                       CASE WHEN home_goals IS NOT NULL AND away_goals IS NOT NULL THEN 'finished' ELSE 'unknown' END AS status_group,
-                       NULL AS venue_name,
-                       NULL AS venue_city,
-                       'historical' AS source,
-                       NULL AS api_fixture_id
-                FROM matches
-                WHERE NOT EXISTS (
-                    SELECT 1
-                    FROM api_football_fixtures f
-                    WHERE matches.date = substr(f.date, 1, 10)
-                      AND lower(matches.home_team) = lower(f.home_team)
-                      AND lower(matches.away_team) = lower(f.away_team)
-                      AND lower(matches.competition) = lower(f.league_name)
-                      AND CAST(matches.season AS TEXT) = CAST(f.season AS TEXT)
-                )
-                UNION ALL
+        api_where = f"WHERE {' AND '.join(api_clauses)}" if api_clauses else ""
+        historical_where = f"WHERE {' AND '.join(historical_clauses)}" if historical_clauses else ""
+        init_db(resolved_db_path)
+        with connect(resolved_db_path) as conn:
+            api_rows = conn.execute(
+                f"""
                 SELECT CAST(fixture_id AS TEXT) AS id,
                        substr(date, 1, 10) AS match_date,
                        league_name AS competition,
                        CAST(season AS TEXT) AS season,
-                       home_team AS home_team,
-                       away_team AS away_team,
+                       home_team,
+                       away_team,
                        CASE
                            WHEN json_extract(raw_json, '$.goals.home') IS NULL OR json_extract(raw_json, '$.goals.away') IS NULL
                            THEN NULL
@@ -835,45 +971,54 @@ def create_app(db_path: Path | str | None = None) -> FastAPI:
                            WHEN status_short IN ('CANC', 'PST', 'ABD', 'AWD', 'WO') THEN 'inactive'
                            ELSE 'upcoming'
                        END AS status_group,
-                       venue_name AS venue_name,
-                       venue_city AS venue_city,
+                       venue_name,
+                       venue_city,
                        'api-football' AS source,
                        fixture_id AS api_fixture_id
                 FROM api_football_fixtures
-            )
-            SELECT *
-            FROM combined
-            {where_sql}
-            ORDER BY match_date DESC, competition, home_team
-            LIMIT ?
-        """
-        params.append(limit)
-        init_db(resolved_db_path)
-        with connect(resolved_db_path) as conn:
-            rows = conn.execute(query, tuple(params)).fetchall()
+                {api_where}
+                ORDER BY date DESC, league_name, home_team
+                LIMIT ?
+                """,
+                tuple([*api_params, limit]),
+            ).fetchall()
+            rows = [dict(row) for row in api_rows]
+            if len(rows) < limit and status not in {"upcoming", "live"}:
+                historical_rows = conn.execute(
+                    f"""
+                    SELECT CAST(id AS TEXT) AS id,
+                           date AS match_date,
+                           competition,
+                           season,
+                           home_team,
+                           away_team,
+                           CASE WHEN home_goals IS NULL OR away_goals IS NULL THEN NULL ELSE home_goals || '-' || away_goals END AS score,
+                           CASE WHEN home_goals IS NOT NULL AND away_goals IS NOT NULL THEN 'FT' ELSE 'HIST' END AS status,
+                           CASE WHEN home_goals IS NOT NULL AND away_goals IS NOT NULL THEN 'finished' ELSE 'unknown' END AS status_group,
+                           NULL AS venue_name,
+                           NULL AS venue_city,
+                           'historical' AS source,
+                           NULL AS api_fixture_id
+                    FROM matches
+                    {historical_where}
+                    ORDER BY date DESC, competition, home_team
+                    LIMIT ?
+                    """,
+                    tuple([*historical_params, limit - len(rows)]),
+                ).fetchall()
+                rows.extend(dict(row) for row in historical_rows)
+            rows = sorted(rows, key=lambda item: (item.get("match_date") or "", item.get("competition") or ""), reverse=True)[:limit]
             totals = conn.execute(
                 """
                 SELECT
-                    (
-                        SELECT COUNT(*)
-                        FROM matches m
-                        WHERE NOT EXISTS (
-                            SELECT 1
-                            FROM api_football_fixtures f
-                            WHERE m.date = substr(f.date, 1, 10)
-                              AND lower(m.home_team) = lower(f.home_team)
-                              AND lower(m.away_team) = lower(f.away_team)
-                              AND lower(m.competition) = lower(f.league_name)
-                              AND CAST(m.season AS TEXT) = CAST(f.season AS TEXT)
-                        )
-                    ) AS historical_matches,
+                    (SELECT COUNT(*) FROM matches) AS historical_matches,
                     (SELECT COUNT(*) FROM api_football_fixtures) AS api_fixtures,
                     (SELECT COUNT(DISTINCT league_name) FROM api_football_fixtures WHERE league_name IS NOT NULL) AS api_competitions,
                     (SELECT COUNT(*) FROM api_football_fixtures WHERE status_short IN ('FT', 'AET', 'PEN')) AS api_finished,
                     (SELECT COUNT(*) FROM api_football_fixtures WHERE status_short NOT IN ('FT', 'AET', 'PEN', 'CANC', 'PST')) AS api_upcoming
                 """
             ).fetchone()
-        return {"fixtures": [dict(row) for row in rows], "totals": dict(totals)}
+        return {"fixtures": rows, "totals": dict(totals)}
 
     @app.get("/api/backtest")
     def backtest(min_train_matches: int = Query(default=8, ge=1, le=100), max_matches: int = Query(default=250, ge=50, le=2000)) -> dict:
@@ -901,7 +1046,7 @@ def create_app(db_path: Path | str | None = None) -> FastAPI:
         history = []
         for row in rows:
             item = dict(row)
-            item["status"] = "evaluated" if item.get("actual_home_goals") is not None and item.get("actual_away_goals") is not None else "pending"
+            item.update(_prediction_lifecycle(item))
             item["top_scores"] = parse_scores(item.get("predicted_scores_json"))
             if item["status"] == "evaluated":
                 item.update(add_evaluation(item))
@@ -912,6 +1057,9 @@ def create_app(db_path: Path | str | None = None) -> FastAPI:
                 "total": len(history),
                 "pending": sum(1 for row in history if row["status"] == "pending"),
                 "evaluated": sum(1 for row in history if row["status"] == "evaluated"),
+                "stats_complete": sum(1 for row in history if row["lifecycle_status"] == "stats_complete"),
+                "score_updated": sum(1 for row in history if row["lifecycle_status"] == "score_updated"),
+                "limbo": sum(1 for row in history if row["is_limbo"]),
             },
         }
 
@@ -932,7 +1080,7 @@ def create_app(db_path: Path | str | None = None) -> FastAPI:
             item = dict(row)
             context = get_match_context(conn, item["home_team"], item["away_team"], match_date=item["match_date"])
         snapshot = json.loads(item.get("snapshot_json") or "{}")
-        item["status"] = "evaluated" if item.get("actual_home_goals") is not None and item.get("actual_away_goals") is not None else "pending"
+        item.update(_prediction_lifecycle(item))
         item["top_scores"] = parse_scores(item.get("predicted_scores_json"))
         item["snapshot"] = snapshot
         item["match_context"] = snapshot.get("match_context") or context
@@ -945,11 +1093,21 @@ def create_app(db_path: Path | str | None = None) -> FastAPI:
             }
         return item
 
+    @app.delete("/api/prediction-history/{prediction_id}")
+    def delete_prediction_history_item(prediction_id: int) -> dict:
+        init_db(resolved_db_path)
+        with connect(resolved_db_path) as conn:
+            deleted = delete_prediction_backtest(conn, prediction_id)
+            conn.commit()
+            clear_cache()
+        return {"deleted": deleted}
+
     @app.get("/api/tracking/pending")
     def tracking_pending() -> dict:
         init_db(resolved_db_path)
         with connect(resolved_db_path) as conn:
-            return {"pending": list_pending_prediction_backtests(conn)}
+            pending = _with_prediction_lifecycle(list_pending_prediction_backtests(conn))
+            return {"pending": pending}
 
     @app.delete("/api/tracking/snapshot/{backtest_id}")
     def delete_tracking_snapshot(backtest_id: int) -> dict:
@@ -958,7 +1116,7 @@ def create_app(db_path: Path | str | None = None) -> FastAPI:
             deleted = delete_pending_prediction_backtest(conn, backtest_id)
             conn.commit()
             clear_cache()
-            pending = list_pending_prediction_backtests(conn)
+            pending = _with_prediction_lifecycle(list_pending_prediction_backtests(conn))
         return {"deleted": deleted, "pending": pending}
 
     @app.post("/api/tracking/snapshot")
@@ -987,14 +1145,32 @@ def create_app(db_path: Path | str | None = None) -> FastAPI:
             estimate_secondary_markets(load_advanced_stats(), request.home_team, request.away_team),
             load_prediction_backtest_metrics(),
         )
+        probs = prediction.model_dump()
+        market_distribution = simulate_market_distributions(
+            probs,
+            markets,
+            simulations=request.simulations,
+            match_context=match_context,
+        )
         player_markets = load_player_markets(request.home_team, request.away_team, markets)
         with connect(resolved_db_path) as quality_conn:
             quality_snapshot = data_coverage(quality_conn)
-        probs = prediction.model_dump()
         simulated_probs = simulation.get("simulation", {})
         home_prob = simulated_probs.get("home_win", probs["home_win_prob"])
         draw_prob = simulated_probs.get("draw", probs["draw_prob"])
         away_prob = simulated_probs.get("away_win", probs["away_win_prob"])
+        pick_report = _betting_pick_report(
+            request.home_team,
+            request.away_team,
+            home_prob,
+            draw_prob,
+            away_prob,
+            probs["over_2_5_prob"],
+            probs["both_teams_score_prob"],
+            markets,
+            market_distribution,
+        )
+        betting_picks = pick_report["recommended"]
         scores = simulation.get("top_scores", [])[:5]
         row = {
             "match_date": request.match_date,
@@ -1029,14 +1205,17 @@ def create_app(db_path: Path | str | None = None) -> FastAPI:
                 match_context,
                 quality_snapshot,
                 fixture=None,
+                betting_picks=betting_picks,
+                pick_report=pick_report,
                 player_markets=player_markets,
+                market_distribution=market_distribution,
             ),
         }
         with connect(resolved_db_path) as conn:
             upsert_prediction_backtest(conn, row)
             conn.commit()
             clear_cache()
-            pending = list_pending_prediction_backtests(conn)
+            pending = _with_prediction_lifecycle(list_pending_prediction_backtests(conn))
         return {"saved": True, "snapshot": row, "pending": pending}
 
     @app.post("/api/tracking/result/{backtest_id}")
@@ -1132,18 +1311,15 @@ def create_app(db_path: Path | str | None = None) -> FastAPI:
         results = []
         with connect(resolved_db_path) as conn:
             for item_date in dates:
-                results.append(
-                    {
-                        "date": item_date,
-                        **sync_api_football_fixtures_by_date(
-                            conn,
-                            client,
-                            date=item_date,
-                            league=request.league,
-                            season=request.season,
-                        ),
-                    }
+                sync_result = sync_api_football_fixtures_by_date(
+                    conn,
+                    client,
+                    date=item_date,
+                    league=request.league,
+                    season=request.season,
                 )
+                reconciliation = reconcile_prediction_backtests_for_date(conn, item_date)
+                results.append({"date": item_date, **sync_result, "reconciliation": reconciliation})
             insert_daily_job(
                 conn,
                 {
@@ -1152,7 +1328,7 @@ def create_app(db_path: Path | str | None = None) -> FastAPI:
                     "status": "api_football_synced",
                     "fixtures_found": sum(item["fixtures"] for item in results),
                     "predictions_created": 0,
-                    "results_updated": sum(item["finished_matches_inserted"] for item in results),
+                    "results_updated": sum(item["reconciliation"]["results_updated"] for item in results),
                     "errors": [item for item in results if item.get("api_errors")],
                 },
             )
@@ -1163,6 +1339,7 @@ def create_app(db_path: Path | str | None = None) -> FastAPI:
             "dates": dates,
             "fixtures": sum(item["fixtures"] for item in results),
             "finished_matches_inserted": sum(item["finished_matches_inserted"] for item in results),
+            "results_updated": sum(item["reconciliation"]["results_updated"] for item in results),
             "daily": results,
         }
 
@@ -1283,6 +1460,8 @@ def create_app(db_path: Path | str | None = None) -> FastAPI:
             sync_api=request.sync_api,
             league=request.league,
             season=request.season,
+            max_fixtures=request.max_fixtures,
+            retry_hours=request.retry_hours,
         )
 
     @app.get("/api/operations/betting-board")
@@ -1337,21 +1516,19 @@ def create_app(db_path: Path | str | None = None) -> FastAPI:
             with connect(resolved_db_path) as conn:
                 daily_sync = []
                 for item_date in _date_window(target, request.range_days):
-                    daily_sync.append(
-                        {
-                            "date": item_date,
-                            **sync_api_football_fixtures_by_date(
-                                conn,
-                                client,
-                                date=item_date,
-                                league=request.league,
-                                season=request.season,
-                            ),
-                        }
+                    sync_result_for_date = sync_api_football_fixtures_by_date(
+                        conn,
+                        client,
+                        date=item_date,
+                        league=request.league,
+                        season=request.season,
                     )
+                    reconciliation = reconcile_prediction_backtests_for_date(conn, item_date)
+                    daily_sync.append({"date": item_date, **sync_result_for_date, "reconciliation": reconciliation})
                 sync_result = {
                     "fixtures": sum(item["fixtures"] for item in daily_sync),
                     "finished_matches_inserted": sum(item["finished_matches_inserted"] for item in daily_sync),
+                    "results_updated": sum(item["reconciliation"]["results_updated"] for item in daily_sync),
                     "daily": daily_sync,
                 }
                 conn.commit()
@@ -1384,7 +1561,22 @@ def create_app(db_path: Path | str | None = None) -> FastAPI:
         prediction = load_predictor().predict(request.home_team, request.away_team)
         payload = prediction.model_dump()
         markets = estimate_secondary_markets(load_advanced_stats(), request.home_team, request.away_team)
+        market_distribution = simulate_market_distributions(payload, markets)
+        payload["secondary_markets"] = markets
+        payload["market_distribution"] = market_distribution
         payload["player_markets"] = load_player_markets(request.home_team, request.away_team, markets)
+        payload["pick_report"] = _betting_pick_report(
+            request.home_team,
+            request.away_team,
+            payload["home_win_prob"],
+            payload["draw_prob"],
+            payload["away_win_prob"],
+            payload["over_2_5_prob"],
+            payload["both_teams_score_prob"],
+            markets,
+            market_distribution,
+        )
+        payload["betting_picks"] = payload["pick_report"]["recommended"]
         if request.save:
             with connect(resolved_db_path) as conn:
                 payload["id"] = insert_prediction(conn, payload)
@@ -1418,7 +1610,27 @@ def create_app(db_path: Path | str | None = None) -> FastAPI:
             estimate_secondary_markets(load_advanced_stats(), request.home_team, request.away_team),
             load_prediction_backtest_metrics(),
         )
+        result["market_distribution"] = simulate_market_distributions(
+            result.get("model_prediction", {}),
+            result["secondary_markets"],
+            simulations=request.simulations,
+            match_context=match_context,
+        )
         result["player_markets"] = load_player_markets(request.home_team, request.away_team, result["secondary_markets"])
+        sim_probs = result.get("simulation", {})
+        model_prediction = result.get("model_prediction", {})
+        result["pick_report"] = _betting_pick_report(
+            request.home_team,
+            request.away_team,
+            sim_probs.get("home_win", model_prediction.get("home_win_prob", 0)),
+            sim_probs.get("draw", model_prediction.get("draw_prob", 0)),
+            sim_probs.get("away_win", model_prediction.get("away_win_prob", 0)),
+            model_prediction.get("over_2_5_prob", 0),
+            model_prediction.get("both_teams_score_prob", 0),
+            result["secondary_markets"],
+            result["market_distribution"],
+        )
+        result["betting_picks"] = result["pick_report"]["recommended"]
         with connect(resolved_db_path) as conn:
             insert_experiment(
                 conn,
@@ -1529,6 +1741,8 @@ class PendingReconciliationRequest(BaseModel):
     sync_api: bool = False
     league: int | None = None
     season: int | None = None
+    max_fixtures: int = 100
+    retry_hours: int = 6
 
 
 class DailyPipelineRequest(BaseModel):

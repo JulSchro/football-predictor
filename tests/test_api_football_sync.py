@@ -5,11 +5,14 @@ from football_predictor.data.api_football_sync import (
     normalize_fixture_player_statistics,
     normalize_fixture,
     normalize_fixture_statistics,
+    normalize_league_coverage,
+    normalize_referee_history,
     normalize_injuries,
     normalize_standings,
     normalize_player_statistics,
     normalize_team_statistics,
     sync_api_football_players,
+    sync_api_football_league_coverage,
     sync_competition_season_core,
     sync_api_football_fixtures_by_date,
 )
@@ -26,6 +29,7 @@ def sample_fixture() -> dict:
     return {
         "fixture": {
             "id": 123,
+            "referee": "Maurizio Mariani, Italy",
             "date": "2026-06-11T20:00:00+00:00",
             "venue": {"name": "Estadio Azteca", "city": "Mexico City"},
             "status": {"short": "FT"},
@@ -108,6 +112,27 @@ def test_normalize_fixture_statistics_maps_api_types() -> None:
     assert mexico["pass_accuracy_pct"] == 86
     assert mexico["dangerous_attacks"] == 52
     assert mexico["cards_estimate"] == 4
+
+
+def test_normalize_referee_history_uses_fixture_stats_and_events() -> None:
+    stats_rows = [
+        {"team": "Mexico", "yellow_cards": 2, "red_cards": 0, "cards_estimate": 2, "fouls": 11},
+        {"team": "France", "yellow_cards": 3, "red_cards": 1, "cards_estimate": 5, "fouls": 13},
+    ]
+    events = {
+        "response": [
+            {"team": {"name": "Mexico"}, "type": "Card", "detail": "Yellow Card", "comments": "Foul"},
+            {"team": {"name": "France"}, "type": "Goal", "detail": "Penalty", "comments": None},
+        ]
+    }
+
+    row = normalize_referee_history(sample_fixture(), stats_rows, events)
+
+    assert row["referee_name"] == "Maurizio Mariani"
+    assert row["referee_country"] == "Italy"
+    assert row["total_cards"] == 7
+    assert row["total_fouls"] == 24
+    assert row["penalties"] == 1
 
 
 def test_normalize_injuries_extracts_player_availability() -> None:
@@ -226,6 +251,41 @@ def test_normalize_player_statistics_extracts_player_squad_and_stats() -> None:
     assert stats[0]["rating"] == 7.12
 
 
+def test_normalize_league_coverage_extracts_feature_flags() -> None:
+    rows = normalize_league_coverage(
+        {
+            "league": {"id": 39, "name": "Premier League", "type": "League"},
+            "country": {"name": "England", "code": "GB"},
+            "seasons": [
+                {
+                    "year": 2025,
+                    "current": True,
+                    "start": "2025-08-01",
+                    "end": "2026-05-30",
+                    "coverage": {
+                        "fixtures": {
+                            "events": True,
+                            "lineups": True,
+                            "statistics_fixtures": True,
+                            "statistics_players": False,
+                        },
+                        "standings": True,
+                        "players": True,
+                        "injuries": True,
+                        "odds": False,
+                    },
+                }
+            ],
+        }
+    )
+
+    assert rows[0]["league_id"] == 39
+    assert rows[0]["season"] == 2025
+    assert rows[0]["fixtures_events"] == 1
+    assert rows[0]["fixtures_statistics_players"] == 0
+    assert rows[0]["odds"] == 0
+
+
 def test_normalize_lineups_extracts_starters_and_subs() -> None:
     payload = {
         "response": [
@@ -284,6 +344,34 @@ def test_normalize_fixture_player_statistics_extracts_match_stats() -> None:
 class FakeApiFootballClient:
     calls = 0
 
+    def get(self, endpoint: str, **params) -> dict:
+        self.calls += 1
+        assert endpoint == "leagues"
+        assert params.get("id") == 1
+        return {
+            "response": [
+                {
+                    "league": {"id": 1, "name": "World Cup", "type": "Cup"},
+                    "country": {"name": "World", "code": None},
+                    "seasons": [
+                        {
+                            "year": 2026,
+                            "current": True,
+                            "coverage": {
+                                "fixtures": {"events": True, "lineups": True, "statistics_fixtures": True, "statistics_players": True},
+                                "standings": True,
+                                "players": True,
+                                "injuries": True,
+                                "odds": True,
+                            },
+                        }
+                    ],
+                }
+            ],
+            "results": 1,
+            "errors": {},
+        }
+
     def fixtures(self, league: int, season: int) -> dict:
         self.calls += 1
         assert league == 1
@@ -337,6 +425,58 @@ class FakeApiFootballClient:
             "paging": {"current": 1, "total": 1},
         }
 
+    def fixture_statistics(self, fixture: int) -> dict:
+        self.calls += 1
+        assert fixture == 123
+        return {
+            "response": [
+                {
+                    "team": {"name": "Mexico"},
+                    "statistics": [
+                        {"type": "Corner Kicks", "value": 6},
+                        {"type": "Shots on Goal", "value": 5},
+                        {"type": "Total Shots", "value": 12},
+                        {"type": "Fouls", "value": 11},
+                        {"type": "Yellow Cards", "value": 2},
+                        {"type": "Red Cards", "value": 0},
+                    ],
+                },
+                {
+                    "team": {"name": "France"},
+                    "statistics": [
+                        {"type": "Corner Kicks", "value": 2},
+                        {"type": "Shots on Goal", "value": 4},
+                        {"type": "Total Shots", "value": 9},
+                        {"type": "Fouls", "value": 13},
+                        {"type": "Yellow Cards", "value": 1},
+                        {"type": "Red Cards", "value": 0},
+                    ],
+                },
+            ],
+            "results": 2,
+            "errors": {},
+        }
+
+    def fixture_events(self, fixture: int) -> dict:
+        self.calls += 1
+        assert fixture == 123
+        return {"response": [], "results": 0, "errors": {}}
+
+    def injuries(self, fixture: int) -> dict:
+        self.calls += 1
+        assert fixture == 123
+        return {"response": [], "results": 0, "errors": {}}
+
+    def fixture_lineups(self, fixture: int) -> dict:
+        self.calls += 1
+        assert fixture == 123
+        return {"response": [], "results": 0, "errors": {}}
+
+    def fixture_players(self, fixture: int) -> dict:
+        self.calls += 1
+        assert fixture == 123
+        return {"response": [], "results": 0, "errors": {}}
+
 
 def test_sync_fixtures_by_date_stores_api_payload(tmp_path) -> None:
     db_path = tmp_path / "api.sqlite"
@@ -347,12 +487,22 @@ def test_sync_fixtures_by_date_stores_api_payload(tmp_path) -> None:
         stored = conn.execute("SELECT COUNT(*) FROM api_football_fixtures").fetchone()[0]
         contexts = conn.execute("SELECT stage FROM match_context").fetchall()
         match = conn.execute("SELECT home_team, away_team FROM matches").fetchone()
+        stats = conn.execute(
+            """
+            SELECT SUM(corners) AS corners, SUM(shots_on_target) AS shots_on_target, SUM(yellow_cards) AS yellow_cards
+            FROM match_team_advanced_stats
+            WHERE source_match_id = 'api-football:123'
+            """
+        ).fetchone()
 
     assert result["fixtures"] == 1
     assert result["finished_matches_inserted"] == 1
+    assert result["finished_details"]["fixture_details_synced"] == 1
+    assert result["finished_details"]["advanced_stats"] == 2
     assert stored == 1
     assert [dict(row) for row in contexts] == [{"stage": "group_stage"}]
     assert dict(match) == {"home_team": "Mexico", "away_team": "France"}
+    assert dict(stats) == {"corners": 8, "shots_on_target": 9, "yellow_cards": 3}
 
 
 def test_sync_competition_season_skips_when_inventory_is_complete(tmp_path) -> None:
@@ -389,6 +539,30 @@ def test_sync_api_football_players_stores_normalized_player_data(tmp_path) -> No
     assert dict(player) == {"api_player_id": 7, "name": "Player Seven"}
     assert dict(squad) == {"team_name": "Mexico", "season": 2026}
     assert dict(stats) == {"minutes": 90, "goals": 1}
+
+
+def test_sync_api_football_league_coverage_stores_flags(tmp_path) -> None:
+    db_path = tmp_path / "coverage_api.sqlite"
+    init_db(db_path)
+    with connect(db_path) as conn:
+        result = sync_api_football_league_coverage(conn, FakeApiFootballClient(), league_ids=[1], season=2026)
+        row = conn.execute(
+            """
+            SELECT league_name, season, fixtures_lineups, players, injuries, odds
+            FROM api_football_league_coverage
+            WHERE league_id = 1 AND season = 2026
+            """
+        ).fetchone()
+
+    assert result["coverage_rows"] == 1
+    assert dict(row) == {
+        "league_name": "World Cup",
+        "season": 2026,
+        "fixtures_lineups": 1,
+        "players": 1,
+        "injuries": 1,
+        "odds": 1,
+    }
 
 
 def test_delete_matches_shadowed_by_api_football_keeps_unique_historical(tmp_path) -> None:

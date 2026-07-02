@@ -13,6 +13,7 @@ from football_predictor.database.db import (
     upsert_api_football_fixture,
     upsert_api_football_fixture_lineup,
     upsert_api_football_fixture_player,
+    upsert_api_football_league_coverage,
     upsert_api_football_standing,
     upsert_api_football_team_statistics,
     upsert_api_football_team_season,
@@ -21,14 +22,54 @@ from football_predictor.database.db import (
     upsert_player_availability,
     upsert_player_match_stats,
     upsert_player_season_stats,
+    upsert_referee_match_history,
     upsert_sync_inventory,
     upsert_team_squad,
     upsert_teams,
+    parse_referee_name,
+    rebuild_all_referee_metrics,
 )
 from football_predictor.prediction.match_context import normalize_competition_context
 
 
 FINISHED_STATUSES = {"FT", "AET", "PEN"}
+
+
+def normalize_league_coverage(item: dict[str, Any]) -> list[dict]:
+    league = item.get("league") or {}
+    country = item.get("country") or {}
+    rows = []
+    for season in item.get("seasons") or []:
+        coverage = season.get("coverage") or {}
+        fixtures = coverage.get("fixtures") or {}
+        standings = coverage.get("standings")
+        rows.append(
+            {
+                "league_id": league.get("id"),
+                "league_name": league.get("name"),
+                "league_type": league.get("type"),
+                "country": country.get("name"),
+                "country_code": country.get("code"),
+                "season": season.get("year"),
+                "current": int(bool(season.get("current"))) if season.get("current") is not None else None,
+                "start_date": season.get("start"),
+                "end_date": season.get("end"),
+                "fixtures_events": _coverage_bool(fixtures.get("events")),
+                "fixtures_lineups": _coverage_bool(fixtures.get("lineups")),
+                "fixtures_statistics_fixtures": _coverage_bool(fixtures.get("statistics_fixtures", fixtures.get("statistics-fixtures"))),
+                "fixtures_statistics_players": _coverage_bool(fixtures.get("statistics_players", fixtures.get("statistics-players"))),
+                "standings": _coverage_bool(standings),
+                "players": _coverage_bool(coverage.get("players")),
+                "top_scorers": _coverage_bool(coverage.get("top_scorers")),
+                "top_assists": _coverage_bool(coverage.get("top_assists")),
+                "top_cards": _coverage_bool(coverage.get("top_cards")),
+                "injuries": _coverage_bool(coverage.get("injuries")),
+                "predictions": _coverage_bool(coverage.get("predictions")),
+                "odds": _coverage_bool(coverage.get("odds")),
+                "raw": {"league": league, "country": country, "season": season},
+            }
+        )
+    return [row for row in rows if row["league_id"] is not None and row["season"] is not None]
 
 
 def normalize_fixture(row: dict[str, Any]) -> dict:
@@ -152,6 +193,61 @@ def normalize_fixture_statistics(
             }
         )
     return rows
+
+
+def normalize_referee_history(
+    fixture_row: dict[str, Any],
+    stats_rows: list[dict],
+    events_payload: dict[str, Any],
+) -> dict | None:
+    fixture = normalize_fixture(fixture_row)
+    fixture_info = fixture_row.get("fixture") or {}
+    league = fixture_row.get("league") or {}
+    referee_name, referee_country = parse_referee_name(fixture_info.get("referee"))
+    if not referee_name or not fixture["fixture_id"]:
+        return None
+    home_team = fixture["home_team"]
+    away_team = fixture["away_team"]
+    stats_by_team = {row.get("team"): row for row in stats_rows}
+    home_stats = stats_by_team.get(home_team, {})
+    away_stats = stats_by_team.get(away_team, {})
+    events = events_payload.get("response") or []
+    card_counts = _event_card_counts(events, home_team, away_team)
+    home_yellow = _first_number(home_stats.get("yellow_cards"), card_counts["home_yellow"])
+    away_yellow = _first_number(away_stats.get("yellow_cards"), card_counts["away_yellow"])
+    home_red = _first_number(home_stats.get("red_cards"), card_counts["home_red"])
+    away_red = _first_number(away_stats.get("red_cards"), card_counts["away_red"])
+    home_cards = _first_number(home_stats.get("cards_estimate"), (home_yellow or 0) + (home_red or 0) * 2)
+    away_cards = _first_number(away_stats.get("cards_estimate"), (away_yellow or 0) + (away_red or 0) * 2)
+    home_fouls = _first_number(home_stats.get("fouls"))
+    away_fouls = _first_number(away_stats.get("fouls"))
+    return {
+        "fixture_id": fixture["fixture_id"],
+        "referee_name": referee_name,
+        "referee_country": referee_country,
+        "date": str(fixture["date"] or "")[:10],
+        "league_id": fixture["league_id"],
+        "league_name": fixture["league_name"],
+        "season": fixture["season"],
+        "round": league.get("round"),
+        "home_team": home_team,
+        "away_team": away_team,
+        "home_yellow": home_yellow,
+        "away_yellow": away_yellow,
+        "home_red": home_red,
+        "away_red": away_red,
+        "home_cards": home_cards,
+        "away_cards": away_cards,
+        "total_yellow": _sum_optional(home_yellow, away_yellow),
+        "total_red": _sum_optional(home_red, away_red),
+        "total_cards": _sum_optional(home_cards, away_cards),
+        "home_fouls": home_fouls,
+        "away_fouls": away_fouls,
+        "total_fouls": _sum_optional(home_fouls, away_fouls),
+        "penalties": _event_penalties(events),
+        "raw_events": events_payload,
+        "raw_fixture": fixture_row,
+    }
 
 
 def normalize_injuries(payload: dict[str, Any]) -> list[dict]:
@@ -473,12 +569,52 @@ def sync_api_football_fixtures_by_date(
     date: str,
     league: int | None = None,
     season: int | None = None,
+    sync_finished_details: bool = True,
+    max_finished_details: int = 50,
 ) -> dict:
     payload = client.fixtures_by_date(date=date, league=league, season=season)
     result = _store_fixture_payload(conn, payload)
+    detail_totals = {
+        "finished_fixtures_detected": 0,
+        "fixture_details_synced": 0,
+        "advanced_stats": 0,
+        "availability_rows": 0,
+        "lineups": 0,
+        "lineup_players": 0,
+        "player_match_stats": 0,
+        "referee_history": 0,
+        "detail_errors": [],
+    }
+    if sync_finished_details:
+        finished = [
+            row
+            for row in payload.get("response") or []
+            if ((row.get("fixture") or {}).get("status") or {}).get("short") in {"FT", "AET", "PEN"}
+        ]
+        detail_totals["finished_fixtures_detected"] = len(finished)
+        for row in finished[: max(0, max_finished_details)]:
+            fixture_id = ((row.get("fixture") or {}).get("id"))
+            if fixture_id is None:
+                continue
+            try:
+                details = sync_api_football_fixture_details(conn, client, int(fixture_id), row)
+            except Exception as exc:  # keep the daily sync alive; report the bad fixture.
+                detail_totals["detail_errors"].append({"fixture_id": fixture_id, "error": str(exc)})
+                continue
+            detail_totals["fixture_details_synced"] += 1
+            for key in [
+                "advanced_stats",
+                "availability_rows",
+                "lineups",
+                "lineup_players",
+                "player_match_stats",
+                "referee_history",
+            ]:
+                detail_totals[key] += int(details.get(key) or 0)
     result["date"] = date
     result["league"] = league
     result["season"] = season
+    result["finished_details"] = detail_totals
     return result
 
 
@@ -839,6 +975,61 @@ def sync_api_football_players(
     }
 
 
+def sync_api_football_league_coverage(
+    conn: sqlite3.Connection,
+    client: ApiFootballClient,
+    league_ids: list[int] | None = None,
+    season: int | None = None,
+    search: str | None = None,
+    country: str | None = None,
+) -> dict:
+    payloads = []
+    requests_used = 0
+    errors = []
+    if league_ids:
+        for league_id in league_ids:
+            payload = client.get("leagues", id=league_id, season=season)
+            payloads.append(payload)
+            requests_used += 1
+            if payload.get("errors"):
+                errors.append({"league_id": league_id, "errors": payload.get("errors")})
+    else:
+        payload = client.leagues(search=search, country=country, season=season)
+        payloads.append(payload)
+        requests_used += 1
+        if payload.get("errors"):
+            errors.append({"errors": payload.get("errors")})
+
+    saved = 0
+    league_count = 0
+    feature_counts = {
+        "fixtures_events": 0,
+        "fixtures_lineups": 0,
+        "fixtures_statistics_fixtures": 0,
+        "fixtures_statistics_players": 0,
+        "standings": 0,
+        "players": 0,
+        "injuries": 0,
+        "odds": 0,
+    }
+    for payload in payloads:
+        response = payload.get("response") or []
+        league_count += len(response)
+        for item in response:
+            for row in normalize_league_coverage(item):
+                upsert_api_football_league_coverage(conn, row)
+                saved += 1
+                for feature in feature_counts:
+                    feature_counts[feature] += int(bool(row.get(feature)))
+    return {
+        "requests_used": requests_used,
+        "leagues": league_count,
+        "coverage_rows": saved,
+        "feature_counts": feature_counts,
+        "errors": errors,
+    }
+
+
 def sync_api_football_fixture_lineups(conn: sqlite3.Connection, client: ApiFootballClient, fixture_id: int) -> dict:
     payload = client.fixture_lineups(fixture=fixture_id)
     lineups, players = normalize_lineups(fixture_id, payload)
@@ -906,6 +1097,11 @@ def sync_api_football_fixture_details(
     for row in stats_rows:
         upsert_advanced_stats(conn, row)
 
+    events_payload = client.fixture_events(fixture=fixture_id)
+    referee_history = normalize_referee_history(fixture_row, stats_rows, events_payload)
+    if referee_history:
+        upsert_referee_match_history(conn, referee_history)
+
     injuries_payload = client.injuries(fixture=fixture_id)
     injury_rows = normalize_injuries(injuries_payload)
     for row in injury_rows:
@@ -917,6 +1113,7 @@ def sync_api_football_fixture_details(
     return {
         "advanced_stats": len(stats_rows),
         "availability_rows": len(injury_rows),
+        "referee_history": 1 if referee_history else 0,
         **lineup_result,
         **player_stats_result,
     }
@@ -953,6 +1150,10 @@ def sync_api_football_fixture_details_bulk(
                     SELECT 1 FROM player_match_stats p
                     WHERE p.fixture_id = api_football_fixtures.fixture_id
                 )
+                OR NOT EXISTS (
+                    SELECT 1 FROM referee_match_history r
+                    WHERE r.fixture_id = api_football_fixtures.fixture_id
+                )
             )
             """
         )
@@ -974,6 +1175,7 @@ def sync_api_football_fixture_details_bulk(
         "lineups": 0,
         "lineup_players": 0,
         "player_match_stats": 0,
+        "referee_history": 0,
         "requests_used_estimate": 0,
         "errors": [],
     }
@@ -982,14 +1184,15 @@ def sync_api_football_fixture_details_bulk(
         raw = json.loads(row["raw_json"] or "{}")
         result = sync_api_football_fixture_details(conn, client, fixture_id, raw)
         totals["fixtures_processed"] += 1
-        totals["requests_used_estimate"] += 4
-        for key in ["advanced_stats", "availability_rows", "lineups", "lineup_players", "player_match_stats"]:
+        totals["requests_used_estimate"] += 5
+        for key in ["advanced_stats", "availability_rows", "lineups", "lineup_players", "player_match_stats", "referee_history"]:
             totals[key] += int(result.get(key) or 0)
         api_errors = [
             result.get("api_errors"),
         ]
         if any(api_errors):
             totals["errors"].append({"fixture_id": fixture_id, "errors": api_errors})
+    totals["referee_metrics_rebuilt"] = rebuild_all_referee_metrics(conn) if totals["referee_history"] else 0
     return totals
 
 
@@ -1029,6 +1232,57 @@ def _to_number(value: Any) -> float | None:
         return float(text)
     except ValueError:
         return None
+
+
+def _coverage_bool(value: Any) -> int | None:
+    if value is None:
+        return None
+    return int(bool(value))
+
+
+def _first_number(*values: Any) -> int | float | None:
+    for value in values:
+        number = _to_number(value)
+        if number is not None:
+            return int(number) if float(number).is_integer() else number
+    return None
+
+
+def _sum_optional(*values: int | float | None) -> int | float | None:
+    clean = [value for value in values if value is not None]
+    if not clean:
+        return None
+    total = sum(float(value) for value in clean)
+    return int(total) if total.is_integer() else total
+
+
+def _event_card_counts(events: list[dict], home_team: str | None, away_team: str | None) -> dict[str, int]:
+    counts = {"home_yellow": 0, "away_yellow": 0, "home_red": 0, "away_red": 0}
+    for event in events:
+        if str(event.get("type") or "").lower() != "card":
+            continue
+        team_name = ((event.get("team") or {}).get("name") or "").strip()
+        side = "home" if team_name == home_team else "away" if team_name == away_team else None
+        if not side:
+            continue
+        detail = str(event.get("detail") or "").lower()
+        if "yellow" in detail:
+            counts[f"{side}_yellow"] += 1
+        elif "red" in detail:
+            counts[f"{side}_red"] += 1
+    return counts
+
+
+def _event_penalties(events: list[dict]) -> int:
+    count = 0
+    for event in events:
+        detail = str(event.get("detail") or "").lower()
+        comments = str(event.get("comments") or "").lower()
+        event_type = str(event.get("type") or "").lower()
+        if "penalty" in detail or ("penalty" in comments and event_type in {"goal", "var"}):
+            if "shootout" not in detail:
+                count += 1
+    return count
 
 
 def _nested(data: dict, *keys: str) -> Any:

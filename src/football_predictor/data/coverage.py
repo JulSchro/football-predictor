@@ -41,6 +41,7 @@ def data_coverage(conn: sqlite3.Connection) -> dict:
     api_standings = safe_count(conn, "api_football_standings")
     api_lineups = safe_count(conn, "api_football_fixture_lineups")
     api_lineup_players = safe_count(conn, "api_football_fixture_players")
+    api_coverage_rows = safe_count(conn, "api_football_league_coverage")
     aliases = safe_count(conn, "team_name_aliases")
     requirements = source_readiness(conn)
 
@@ -63,7 +64,7 @@ def data_coverage(conn: sqlite3.Connection) -> dict:
         "api_enrichment": coverage_item("Enriquecimiento API", api_team_stats > 0 or api_standings > 0 or api_lineups > 0, "real", api_team_stats + api_standings + api_lineups),
         "environment": coverage_item("Sedes/estadio", venues > 0, "mixed", venues),
         "name_mapping": coverage_item("Mapeo de nombres", aliases > 0, "real", aliases),
-        "api_readiness": coverage_item("Preparacion API", requirements["ready_count"] > 0, "mixed", requirements["total"]),
+        "api_readiness": coverage_item("Preparacion API", requirements["ready_count"] > 0 or api_coverage_rows > 0, "mixed", requirements["total"] + api_coverage_rows),
         "predictions": coverage_item("Predicciones guardadas", predictions > 0, "real", predictions),
         "experiments": coverage_item("Experimentos", experiments > 0, "real", experiments),
     }

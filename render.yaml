@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: probedge
+    env: python
+    plan: starter
+    buildCommand: pip install -e .
+    startCommand: uvicorn football_predictor.web.asgi:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.2
+      - key: FOOTBALL_PREDICTOR_DB_PATH
+        value: /var/data/football_predictor.sqlite
+      - key: API_FOOTBALL_KEY
+        sync: false
+    disk:
+      name: probedge-data
+      mountPath: /var/data
+      sizeGB: 1

@@ -96,6 +96,8 @@ La interfaz muestra muchas variables avanzadas desde el principio. Cuando no hay
 
 ## Deploy
 
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/JulSchro/football-predictor)
+
 La app puede subirse como servicio web con FastAPI/Uvicorn.
 
 Render:

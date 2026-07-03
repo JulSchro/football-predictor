@@ -579,6 +579,14 @@ def data_quality_report(db_path: Path = settings.db_path) -> None:
     typer.echo(json.dumps(compact, indent=2))
 
 
+@app.command("market-coverage")
+def market_coverage_report(db_path: Path = settings.db_path) -> None:
+    init_db(db_path)
+    with connect(db_path) as conn:
+        report = data_coverage(conn).get("market_coverage", {})
+    typer.echo(json.dumps(report, indent=2))
+
+
 @app.command("sync-fifa-ranking")
 def sync_fifa_ranking(db_path: Path = settings.db_path, count: int = 250) -> None:
     init_db(db_path)

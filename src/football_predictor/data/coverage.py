@@ -44,6 +44,7 @@ def data_coverage(conn: sqlite3.Connection) -> dict:
     api_coverage_rows = safe_count(conn, "api_football_league_coverage")
     aliases = safe_count(conn, "team_name_aliases")
     requirements = source_readiness(conn)
+    markets = market_coverage(conn)
 
     groups = {
         "core_results": coverage_item("Datos de partidos", matches > 0 or api_fixtures > 0, "real", matches + api_fixtures),
@@ -75,6 +76,7 @@ def data_coverage(conn: sqlite3.Connection) -> dict:
         "required_groups": REQUIRED_DATA_GROUPS,
         "readiness": requirements,
         "competition_coverage": competition_coverage(conn),
+        "market_coverage": markets,
     }
 
 
@@ -95,6 +97,82 @@ def safe_count(conn: sqlite3.Connection, table: str) -> int:
         return int(conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
     except sqlite3.OperationalError:
         return 0
+
+
+def _market_strength(ratio: float, sample_matches: int) -> str:
+    if sample_matches >= 100 and ratio >= 0.75:
+        return "strong"
+    if sample_matches >= 40 and ratio >= 0.45:
+        return "medium"
+    if sample_matches > 0:
+        return "weak"
+    return "missing"
+
+
+def _market_item(label: str, rows: sqlite3.Row, key: str, total_matches: int) -> dict:
+    team_rows = int(rows[key] or 0)
+    sample_matches = team_rows // 2
+    ratio = sample_matches / total_matches if total_matches else 0.0
+    return {
+        "label": label,
+        "team_rows": team_rows,
+        "sample_matches": sample_matches,
+        "coverage_ratio": round(ratio, 3),
+        "strength": _market_strength(ratio, sample_matches),
+    }
+
+
+def market_coverage(conn: sqlite3.Connection, limit: int = 20) -> dict:
+    total_matches = safe_count(conn, "api_football_fixtures") or safe_count(conn, "matches")
+    totals = conn.execute(
+        """
+        SELECT
+            COUNT(*) AS team_rows,
+            COUNT(DISTINCT source_match_id) AS matches_with_any_stats,
+            SUM(CASE WHEN corners IS NOT NULL THEN 1 ELSE 0 END) AS corners,
+            SUM(CASE WHEN shots_on_target IS NOT NULL THEN 1 ELSE 0 END) AS shots_on_target,
+            SUM(CASE WHEN total_shots IS NOT NULL THEN 1 ELSE 0 END) AS total_shots,
+            SUM(CASE WHEN yellow_cards IS NOT NULL OR red_cards IS NOT NULL OR cards_estimate IS NOT NULL THEN 1 ELSE 0 END) AS cards,
+            SUM(CASE WHEN xg IS NOT NULL THEN 1 ELSE 0 END) AS xg,
+            SUM(CASE WHEN possession_pct IS NOT NULL THEN 1 ELSE 0 END) AS possession,
+            SUM(CASE WHEN fouls IS NOT NULL THEN 1 ELSE 0 END) AS fouls
+        FROM match_team_advanced_stats
+        """
+    ).fetchone()
+    by_competition = conn.execute(
+        """
+        SELECT
+            COALESCE(f.league_name, 'Unknown') AS competition,
+            COUNT(DISTINCT s.source_match_id) AS matches_with_any_stats,
+            COUNT(DISTINCT CASE WHEN s.corners IS NOT NULL THEN s.source_match_id END) AS corners_matches,
+            COUNT(DISTINCT CASE WHEN s.shots_on_target IS NOT NULL THEN s.source_match_id END) AS shots_on_target_matches,
+            COUNT(DISTINCT CASE WHEN s.yellow_cards IS NOT NULL OR s.red_cards IS NOT NULL OR s.cards_estimate IS NOT NULL THEN s.source_match_id END) AS cards_matches,
+            COUNT(DISTINCT CASE WHEN s.xg IS NOT NULL THEN s.source_match_id END) AS xg_matches
+        FROM match_team_advanced_stats s
+        LEFT JOIN api_football_fixtures f
+            ON s.source_match_id = 'api-football:' || f.fixture_id
+        GROUP BY COALESCE(f.league_name, 'Unknown')
+        ORDER BY matches_with_any_stats DESC, competition
+        LIMIT ?
+        """,
+        (limit,),
+    ).fetchall()
+    markets = {
+        "corners": _market_item("Corners", totals, "corners", total_matches),
+        "shots_on_target": _market_item("Tiros a puerta", totals, "shots_on_target", total_matches),
+        "total_shots": _market_item("Tiros totales", totals, "total_shots", total_matches),
+        "cards": _market_item("Tarjetas", totals, "cards", total_matches),
+        "xg": _market_item("xG", totals, "xg", total_matches),
+        "possession": _market_item("Posesion", totals, "possession", total_matches),
+        "fouls": _market_item("Faltas", totals, "fouls", total_matches),
+    }
+    return {
+        "total_matches_reference": int(total_matches or 0),
+        "matches_with_any_stats": int(totals["matches_with_any_stats"] or 0),
+        "team_stat_rows": int(totals["team_rows"] or 0),
+        "markets": markets,
+        "by_competition": [dict(row) for row in by_competition],
+    }
 
 
 def source_readiness(conn: sqlite3.Connection) -> dict:

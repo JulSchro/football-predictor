@@ -14,6 +14,7 @@ from football_predictor.data.api_football_sync import (
     sync_api_football_team_statistics,
     sync_api_football_players,
     sync_api_football_league_coverage,
+    sync_api_football_market_stats_bulk,
     sync_api_football_fixture_details_bulk,
     sync_competition_season_core,
     sync_api_football_fixture_details_by_id,
@@ -901,6 +902,29 @@ def sync_api_fixture_details_bulk(
             season=season,
             only_finished=not include_unfinished,
             missing_only=not force,
+            max_fixtures=max_fixtures,
+        )
+        conn.commit()
+    typer.echo(json.dumps(result, indent=2))
+
+
+@app.command("sync-api-football-market-stats-bulk")
+def sync_api_market_stats_bulk(
+    league: int | None = typer.Option(None, help="Opcional: ID de liga/competicion."),
+    season: int | None = typer.Option(None, help="Opcional: temporada."),
+    max_fixtures: int = typer.Option(100, min=1, max=3000, help="Maximo de fixtures a enriquecer."),
+    include_unfinished: bool = typer.Option(False, help="Tambien intentar partidos no finalizados."),
+    db_path: Path = settings.db_path,
+) -> None:
+    init_db(db_path)
+    client = ApiFootballClient()
+    with connect(db_path) as conn:
+        result = sync_api_football_market_stats_bulk(
+            conn,
+            client,
+            league=league,
+            season=season,
+            only_finished=not include_unfinished,
             max_fixtures=max_fixtures,
         )
         conn.commit()

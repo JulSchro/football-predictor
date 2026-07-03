@@ -1198,6 +1198,69 @@ def sync_api_football_fixture_details_bulk(
     return totals
 
 
+def sync_api_football_market_stats_bulk(
+    conn: sqlite3.Connection,
+    client: ApiFootballClient,
+    league: int | None = None,
+    season: int | None = None,
+    only_finished: bool = True,
+    max_fixtures: int = 100,
+) -> dict:
+    clauses = [
+        """
+        NOT EXISTS (
+            SELECT 1 FROM match_team_advanced_stats s
+            WHERE s.source_match_id = 'api-football:' || api_football_fixtures.fixture_id
+        )
+        """
+    ]
+    params: list[int | str] = []
+    if league is not None:
+        clauses.append("league_id = ?")
+        params.append(league)
+    if season is not None:
+        clauses.append("season = ?")
+        params.append(season)
+    if only_finished:
+        clauses.append("status_short IN ('FT', 'AET', 'PEN')")
+    rows = conn.execute(
+        f"""
+        SELECT fixture_id, raw_json
+        FROM api_football_fixtures
+        WHERE {' AND '.join(clauses)}
+        ORDER BY date ASC, fixture_id ASC
+        LIMIT ?
+        """,
+        (*params, max_fixtures),
+    ).fetchall()
+    totals = {
+        "fixtures_processed": 0,
+        "advanced_stats": 0,
+        "requests_used": 0,
+        "skipped_missing_fixture_raw": 0,
+        "errors": [],
+    }
+    for row in rows:
+        fixture_id = int(row["fixture_id"])
+        fixture_row = json.loads(row["raw_json"] or "{}")
+        if not fixture_row:
+            totals["skipped_missing_fixture_raw"] += 1
+            continue
+        try:
+            payload = client.fixture_statistics(fixture=fixture_id)
+            totals["requests_used"] += 1
+            stats_rows = normalize_fixture_statistics(fixture_id, fixture_row, payload)
+            for stats_row in stats_rows:
+                upsert_advanced_stats(conn, stats_row)
+            totals["fixtures_processed"] += 1
+            totals["advanced_stats"] += len(stats_rows)
+            if payload.get("errors"):
+                totals["errors"].append({"fixture_id": fixture_id, "errors": payload.get("errors")})
+        except Exception as exc:
+            totals["errors"].append({"fixture_id": fixture_id, "error": str(exc)})
+    return totals
+
+
 def sync_api_football_fixture_details_by_id(
     conn: sqlite3.Connection,
     client: ApiFootballClient,

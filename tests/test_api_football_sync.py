@@ -15,6 +15,7 @@ from football_predictor.data.api_football_sync import (
     sync_api_football_league_coverage,
     sync_competition_season_core,
     sync_api_football_fixtures_by_date,
+    sync_api_football_market_stats_bulk,
 )
 from football_predictor.database.db import (
     connect,
@@ -188,6 +189,36 @@ def test_normalize_fixture_statistics_maps_api_types() -> None:
     assert mexico["pass_accuracy_pct"] == 86
     assert mexico["dangerous_attacks"] == 52
     assert mexico["cards_estimate"] == 4
+
+
+def test_sync_market_stats_bulk_only_fetches_missing_advanced_stats(tmp_path) -> None:
+    class FakeClient:
+        calls = 0
+
+        def fixture_statistics(self, fixture: int) -> dict:
+            self.calls += 1
+            return {
+                "response": [
+                    {"team": {"name": "Mexico"}, "statistics": [{"type": "Corner Kicks", "value": 6}]},
+                    {"team": {"name": "France"}, "statistics": [{"type": "Corner Kicks", "value": 2}]},
+                ],
+                "errors": [],
+            }
+
+    db_path = tmp_path / "market.sqlite"
+    init_db(db_path)
+    with connect(db_path) as conn:
+        from football_predictor.database.db import upsert_api_football_fixture
+
+        upsert_api_football_fixture(conn, normalize_fixture(sample_fixture()))
+        client = FakeClient()
+        result = sync_api_football_market_stats_bulk(conn, client, league=1, season=2026, max_fixtures=10)
+        rows = conn.execute("SELECT team, corners FROM match_team_advanced_stats ORDER BY team").fetchall()
+
+    assert client.calls == 1
+    assert result["fixtures_processed"] == 1
+    assert result["requests_used"] == 1
+    assert [dict(row) for row in rows] == [{"team": "France", "corners": 2}, {"team": "Mexico", "corners": 6}]
 
 
 def test_normalize_referee_history_uses_fixture_stats_and_events() -> None:
